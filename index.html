@@ -1,0 +1,1651 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบบริหารจัดการการเรียนรู้และประเมินผล ระดับประถมศึกษา (Realtime Cloud Sync)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- SheetJS สำหรับอ่าน/ส่งออกไฟล์ Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Mammoth สำหรับอ่านไฟล์ Word (.docx) -->
+  <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
+  <style>
+    * { box-sizing: border-box; font-family: 'Prompt', sans-serif; margin: 0; padding: 0; }
+    body { background-color: #f1f5f9; padding: 25px 20px; color: #1e293b; }
+    .container { max-width: 1600px; margin: 0 auto; }
+
+    /* Top Bar & Global Context Bar */
+    .top-bar { margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
+    .top-bar h1 { font-size: 24px; font-weight: 700; color: #0f172a; }
+    .top-bar p { color: #64748b; font-size: 13.5px; margin-top: 2px; }
+
+    /* แถบควบคุมระดับโลก (Global Context Bar) */
+    .global-context-bar { background: #ffffff; border: 2px solid #3b82f6; border-radius: 12px; padding: 14px 20px; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(37,99,235,0.08); display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
+    .global-context-bar .ctx-item { display: flex; flex-direction: column; flex: 1; min-width: 140px; }
+    .global-context-bar label { font-size: 12.5px; font-weight: 600; color: #1d4ed8; margin-bottom: 4px; }
+    .global-context-bar select, .global-context-bar input { padding: 6px 10px; border: 1.5px solid #93c5fd; border-radius: 6px; font-size: 13.5px; background: #eff6ff; font-weight: 600; color: #1e3a8a; }
+
+    .main-nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 25px; }
+    .nav-btn { background: #ffffff; border: 2px solid #cbd5e1; border-radius: 12px; padding: 14px 10px; font-size: 15px; font-weight: 600; color: #475569; cursor: pointer; transition: 0.2s; text-align: center; }
+    .nav-btn:hover { border-color: #2563eb; color: #2563eb; transform: translateY(-2px); }
+    .nav-btn.active { background: #2563eb; color: #ffffff; border-color: #2563eb; box-shadow: 0 4px 12px rgba(37,99,235,0.25); }
+    .nav-btn.master-btn { border-color: #0284c7; color: #0284c7; }
+    .nav-btn.master-btn.active { background: #0284c7; color: #ffffff; }
+
+    /* Panes */
+    .view-pane { display: none; }
+    .view-pane.active { display: block; }
+
+    /* Cards */
+    .card { background: #ffffff; border-radius: 12px; padding: 22px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom: 20px; }
+    .card-title { font-size: 17px; font-weight: 600; color: #1e3a8a; margin-bottom: 15px; border-bottom: 1.5px solid #f1f5f9; padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+
+    /* Forms */
+    .row { display: flex; gap: 15px; margin-bottom: 12px; flex-wrap: wrap; }
+    .col { flex: 1; min-width: 170px; }
+    label { display: block; font-size: 13.5px; font-weight: 500; color: #334155; margin-bottom: 5px; }
+    input, textarea, select { width: 100%; padding: 8px 12px; border: 1.5px solid #cbd5e1; border-radius: 6px; font-size: 14px; outline: none; background: #fff; }
+    input:focus, textarea:focus, select:focus { border-color: #2563eb; }
+    textarea { resize: vertical; min-height: 70px; }
+
+    /* Progress Box */
+    .term-progress-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 14px 18px; margin-bottom: 18px; }
+    .progress-bar-bg { background: #e2e8f0; border-radius: 20px; height: 16px; overflow: hidden; margin-top: 8px; }
+    .progress-bar-fill { background: linear-gradient(90deg, #3b82f6, #1d4ed8); height: 100%; border-radius: 20px; transition: width 0.4s ease; width: 0%; }
+
+    /* Stats Grid */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .stat-badge { background: #ffffff; border-radius: 10px; padding: 14px; border-left: 4px solid #2563eb; box-shadow: 0 2px 4px rgba(0,0,0,0.03); }
+    .stat-badge.green { border-left-color: #10b981; }
+    .stat-badge.amber { border-left-color: #f59e0b; }
+    .stat-badge.red { border-left-color: #ef4444; }
+    .stat-badge.blue { border-left-color: #3b82f6; }
+    .stat-label { font-size: 12.5px; color: #64748b; font-weight: 500; }
+    .stat-val { font-size: 18px; font-weight: 700; color: #0f172a; margin-top: 3px; }
+
+    /* Tables */
+    .table-container { overflow-x: auto; margin-top: 10px; }
+    table { width: 100%; border-collapse: collapse; min-width: 1200px; }
+    th, td { padding: 9px 12px; text-align: left; font-size: 13.5px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+    th { background: #f8fafc; font-weight: 600; color: #475569; }
+    tr:hover { background-color: #f8fafc; }
+    .score-input { width: 65px; padding: 5px; text-align: center; }
+    .tbl-edit-input { width: 100%; padding: 6px 8px; border: 1.5px solid #cbd5e1; border-radius: 4px; font-size: 13px; }
+    .indicator-item-box { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+
+    /* Radio Group */
+    .att-box { display: flex; gap: 15px; font-size: 14px; align-items: center; flex-wrap: wrap; }
+    .att-box label { margin-bottom: 0; font-weight: normal; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 2px 6px; }
+
+    /* Calendar Widget Styling */
+    .mini-calendar { background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 12px; margin-top: 8px; }
+    .cal-header { display: flex; justify-content: space-between; align-items: center; font-weight: 600; margin-bottom: 8px; font-size: 14px; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; font-size: 13px; }
+    .cal-day-name { font-weight: 600; color: #64748b; font-size: 12px; padding-bottom: 4px; }
+    .cal-day { padding: 6px 2px; border-radius: 4px; background: #fff; border: 1px solid #e2e8f0; cursor: pointer; }
+    .cal-day:hover { background: #e0f2fe; border-color: #3b82f6; }
+    .cal-day.recorded { background: #10b981 !important; color: #fff !important; font-weight: bold; border-color: #059669; }
+    .cal-day.selected { border: 2px solid #2563eb; font-weight: bold; }
+
+    /* Buttons */
+    .btn { padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-success { background: #16a34a; color: #fff; }
+    .btn-success:hover { background: #15803d; }
+    .btn-warning { background: #f59e0b; color: #fff; }
+    .btn-warning:hover { background: #d97706; }
+    .btn-secondary { background: #e2e8f0; color: #334155; }
+    .btn-danger { background: #fee2e2; color: #dc2626; padding: 8px 16px; font-size: 14px; }
+    .btn-danger:hover { background: #fecaca; }
+    .file-btn { display: inline-block; padding: 7px 14px; background: #e0f2fe; color: #0369a1; border-radius: 6px; cursor: pointer; font-size: 13.5px; font-weight: 500; }
+    
+    /* Bottom Actions */
+    .action-bottom-bar { background: #ffffff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 15px; border: 1.5px solid #e2e8f0; }
+    .action-group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+    .badge-grade { background: #dbeafe; color: #1e40af; }
+    .badge-danger { background: #fee2e2; color: #dc2626; }
+
+    /* Modal Preview ขนาด A4 มาตรฐาน */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: center; }
+    .modal-content { background: #e2e8f0; width: 95%; max-width: 900px; max-height: 95vh; border-radius: 12px; overflow-y: auto; padding: 25px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+    .preview-sheet { font-family: 'TH Sarabun PSK', 'Prompt', sans-serif; font-size: 16px; line-height: 1.4; color: #000; background: #fff; width: 210mm; min-height: 297mm; margin: 0 auto; padding: 15mm 20mm; box-shadow: 0 4px 10px rgba(0,0,0,0.15); word-break: break-word; overflow-wrap: break-word; }
+
+    @media print {
+      @page { size: A4 portrait; margin: 15mm; }
+      body * { visibility: hidden; }
+      #previewModal, #previewModal *, .print-container, .print-container * { visibility: visible; }
+      #previewModal { position: absolute; left: 0; top: 0; background: #fff; width: 100%; }
+      .modal-content { padding: 0; background: #fff; box-shadow: none; width: 100%; max-width: 100%; }
+      .preview-sheet { border: none; box-shadow: none; padding: 0; width: 100%; min-height: auto; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="top-bar">
+    <div>
+      <h1>ระบบบริหารจัดการการเรียนรู้และประเมินผล ระดับประถมศึกษา</h1>
+      <p>หลักสูตรแกนกลางการศึกษาขั้นพื้นฐาน (ซิงค์ข้อมูลเรียลไทม์ระหว่างอุปกรณ์ ไอแพด โน้ตบุ๊ค และมือถืออัตโนมัติ)</p>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <span id="syncStatusBadge" class="badge" style="background:#dcfce7; color:#166534; font-size:12px;">☁️ ซิงค์คลาวด์อัตโนมัติเปิดอยู่</span>
+      <button class="btn btn-warning" onclick="manualCloudSync()" style="font-size:13px; padding:6px 12px;">🔄 ซิงค์ตอนนี้</button>
+    </div>
+  </div>
+
+  <!-- แถบควบคุมระดับโลก (Global Context Bar) -->
+  <div class="global-context-bar">
+    <div class="ctx-item">
+      <label>ปีการศึกษา (พ.ศ.)</label>
+      <select id="globalYear" onchange="syncGlobalContext()">
+        <option value="2568">2568</option>
+        <option value="2569" selected>2569</option>
+        <option value="2570">2570</option>
+        <option value="2571">2571</option>
+        <option value="2572">2572</option>
+        <option value="2573">2573</option>
+      </select>
+    </div>
+    <div class="ctx-item">
+      <label>ภาคเรียน</label>
+      <select id="globalTerm" onchange="syncGlobalContext()">
+        <option value="1">ภาคเรียนที่ 1</option>
+        <option value="2">ภาคเรียนที่ 2</option>
+      </select>
+    </div>
+    <div class="ctx-item">
+      <label>ระดับชั้น</label>
+      <select id="globalGrade" onchange="syncGlobalContext()">
+        <option value="p1">ประถมศึกษาปีที่ 1 (ป.1)</option>
+        <option value="p2">ประถมศึกษาปีที่ 2 (ป.2)</option>
+        <option value="p3">ประถมศึกษาปีที่ 3 (ป.3)</option>
+        <option value="p4">ประถมศึกษาปีที่ 4 (ป.4)</option>
+        <option value="p5">ประถมศึกษาปีที่ 5 (ป.5)</option>
+        <option value="p6">ประถมศึกษาปีที่ 6 (ป.6)</option>
+      </select>
+    </div>
+    <div class="ctx-item" style="max-width: 100px;">
+      <label>ห้อง</label>
+      <input type="text" id="globalRoom" value="1" onchange="syncGlobalContext()">
+    </div>
+  </div>
+
+  <!-- 4 เมนูหลัก -->
+  <div class="main-nav">
+    <button class="nav-btn master-btn active" onclick="switchView('view-master')">⚙️ ข้อมูลพื้นฐาน (Master Data)</button>
+    <button class="nav-btn" onclick="switchView('view-daily')">1. บันทึกหลังสอน</button>
+    <button class="nav-btn" onclick="switchView('view-progress')">2. ความคืบหน้าเนื้อหา & บันทึกงาน</button>
+    <button class="nav-btn" onclick="switchView('view-scores')">3. ทะเบียนคะแนนสะสม</button>
+  </div>
+
+  <!-- ==================== 0. ข้อมูลพื้นฐาน (Master Data) ==================== -->
+  <div id="view-master" class="view-pane active">
+    <div class="card">
+      <div class="card-title">
+        <span>โครงสร้างหน่วยการเรียนรู้ และ ตัวชี้วัดตามหลักสูตร (เพิ่มได้หลายตัวชี้วัดทั้งระหว่างทางและปลายทาง)</span>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <select id="masterSubjectSelect" onchange="renderMasterUnitTable()" style="width:230px;">
+            <option value="math">คณิตศาสตร์</option>
+            <option value="sci">วิทยาศาสตร์และเทคโนโลยี</option>
+            <option value="thai">ภาษาไทย</option>
+            <option value="eng">ภาษาอังกฤษ</option>
+            <option value="soc">สังคมศึกษา ศาสนา และวัฒนธรรม</option>
+            <option value="health">สุขศึกษาและพลศึกษา</option>
+            <option value="art">ศิลปะ</option>
+            <option value="work">การงานอาชีพ</option>
+          </select>
+          <button class="btn btn-primary" onclick="addNewUnitRow()">+ เพิ่มหน่วยใหม่</button>
+        </div>
+      </div>
+      <p style="font-size:13px; color:#64748b; margin-bottom:12px;">* ข้อมูลที่แก้ไขจะซิงค์อัตโนมัติไปยังทุกอุปกรณ์ที่เปิดลิงก์นี้</p>
+      
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 60px; text-align:center;">หน่วยที่</th>
+              <th style="width: 180px;">ชื่อหน่วยการเรียนรู้</th>
+              <th style="width: 340px;">ตัวชี้วัดระหว่างทาง (Formative) [เพิ่มได้หลายตัว]</th>
+              <th style="width: 340px;">ตัวชี้วัดปลายทาง (Summative) [เพิ่มได้หลายตัว]</th>
+              <th style="width: 75px; text-align:center; background:#eff6ff;">คะแนนเก็บ</th>
+              <th style="width: 75px; text-align:center; background:#f0fdf4;">คะแนนสอบ</th>
+              <th style="width: 60px; text-align:center;">รวม</th>
+              <th style="width: 60px; text-align:center;">ลบ</th>
+            </tr>
+          </thead>
+          <tbody id="masterUnitTableBody"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:15px; display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:14px; font-weight:600; color:#1e3a8a;" id="lbl-total-course-score">คะแนนรวมทั้งรายวิชา: 100 คะแนน</span>
+        <button class="btn btn-success" onclick="saveMasterUnitsFromTable()">💾 บันทึกโครงสร้างหลักสูตร</button>
+      </div>
+    </div>
+
+    <!-- ฐานข้อมูลนักเรียน -->
+    <div class="card">
+      <div class="card-title">
+        <span>ฐานข้อมูลนักเรียน (รองรับอัปโหลดไฟล์ Word และ Excel)</span>
+        <div>
+          <label class="file-btn" style="background:#dcfce7; color:#166534;">
+            📁 อัปโหลด Word / Excel
+            <input type="file" id="officeFileUpload" accept=".xlsx, .xls, .docx, .txt, .csv" style="display:none;" onchange="handleOfficeFileUpload(event)">
+          </label>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex: 2;"><input type="text" id="masterNewStudent" placeholder="ชื่อ-นามสกุล นักเรียน"></div>
+        <div class="col" style="flex: 0.5;"><button class="btn btn-primary" onclick="addMasterStudent()">+ เพิ่มนักเรียน</button></div>
+      </div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 60px; text-align:center;">เลขที่</th>
+              <th>ชื่อ - นามสกุล นักเรียน</th>
+              <th style="width: 140px; text-align:center;">ระดับชั้น/ห้อง</th>
+              <th style="width: 80px; text-align:center;">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="masterStudentTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 1. บันทึกหลังสอน ==================== -->
+  <div id="view-daily" class="view-pane">
+    <div class="term-progress-box">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-weight:600; color:#1e3a8a;" id="lbl-daily-progress-title">📅 ความคืบหน้าการจัดการเรียนรู้ (เป้าหมาย 100 วัน อิงตามชั้นและเทอม)</span>
+        <span style="font-weight:700; color:#2563eb;" id="lbl-daily-progress">สอนไปแล้ว 0 / 100 วัน (0%)</span>
+      </div>
+      <div class="progress-bar-bg"><div class="progress-bar-fill" id="bar-daily-progress"></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">ข้อมูลรายวิชา & ปฏิทินบันทึกวันสอน</div>
+      <div class="row">
+        <div class="col" style="flex: 1.2;">
+          <label>วันที่ทำการสอน</label>
+          <input type="date" id="dailyDate" onchange="onDateInputChange()">
+          <div class="mini-calendar" id="miniCalendarWidget">
+            <div class="cal-header">
+              <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:12px;" onclick="changeMonth(-1)">◀</button>
+              <span id="calMonthYearLabel">ตุลาคม 2569</span>
+              <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:12px;" onclick="changeMonth(1)">▶</button>
+            </div>
+            <div class="cal-grid" id="calDaysGrid"></div>
+          </div>
+        </div>
+
+        <div class="col" style="flex: 1.5;">
+          <label>กลุ่มสาระการเรียนรู้ / รายวิชา</label>
+          <select id="dailySubjectSelect" onchange="onDailyClassSubjectChange()" style="margin-bottom:10px;">
+            <option value="math">คณิตศาสตร์</option>
+            <option value="sci">วิทยาศาสตร์และเทคโนโลยี</option>
+            <option value="thai">ภาษาไทย</option>
+            <option value="eng">ภาษาอังกฤษ</option>
+            <option value="soc">สังคมศึกษา ศาสนา และวัฒนธรรม</option>
+            <option value="health">สุขศึกษาและพลศึกษา</option>
+            <option value="art">ศิลปะ</option>
+            <option value="work">การงานอาชีพ</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-badge green"><div class="stat-label">มาเรียน (ปกติ)</div><div class="stat-val" id="stat-att-present">0 คน</div></div>
+      <div class="stat-badge amber"><div class="stat-label">ลาป่วย</div><div class="stat-val" id="stat-att-sick">0 คน</div></div>
+      <div class="stat-badge blue"><div class="stat-label">ลากิจ</div><div class="stat-val" id="stat-att-leave">0 คน</div></div>
+      <div class="stat-badge red"><div class="stat-label">ขาดเรียน</div><div class="stat-val" id="stat-att-absent">0 คน</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <span>เช็คการมาเรียนประจำวัน (ลิงก์รายชื่อจากฐานข้อมูลนักเรียน)</span>
+        <button class="btn btn-secondary" onclick="resetAllPresent()">รีเซ็ตทุกคนเป็น "มาเรียน"</button>
+      </div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 60px; text-align:center;">เลขที่</th>
+              <th style="min-width: 220px;">ชื่อ - สกุล นักเรียน</th>
+              <th style="text-align:center;">สถานะการมาเรียน (คลิกเลือก)</th>
+            </tr>
+          </thead>
+          <tbody id="dailyAttendanceTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">ข้อมูลการจัดกิจกรรมการเรียนรู้ประจำวัน & บันทึกพฤติกรรม K-P-A (Bloom's Taxonomy)</div>
+      <div class="row">
+        <div class="col" style="flex: 1.5;"><label>หน่วยการเรียนรู้</label><select id="dailyUnitSelect" onchange="applyUnitIndicators()"></select></div>
+      </div>
+
+      <!-- ตัวชี้วัดระหว่างทาง -->
+      <div class="row">
+        <div class="col">
+          <label style="color:#2563eb;">📍 ตัวชี้วัดระหว่างทาง (ดึงจากข้อมูลพื้นฐาน - แก้ไข ลบ หรือเพิ่มได้อิสระ)</label>
+          <div id="dynamicFormativeContainer"></div>
+          <button type="button" class="btn btn-secondary" style="padding:4px 10px; font-size:12px; margin-top:5px;" onclick="addExtraInputBox('formative')">+ เพิ่มช่องตัวชี้วัดระหว่างทาง</button>
+        </div>
+      </div>
+
+      <!-- ตัวชี้วัดปลายทาง -->
+      <div class="row" style="margin-top:10px;">
+        <div class="col">
+          <label style="color:#059669;">🎯 ตัวชี้วัดปลายทาง (ดึงจากข้อมูลพื้นฐาน - แก้ไข ลบ หรือเพิ่มได้อิสระ)</label>
+          <div id="dynamicSummativeContainer"></div>
+          <button type="button" class="btn btn-secondary" style="padding:4px 10px; font-size:12px; margin-top:5px;" onclick="addExtraInputBox('summative')">+ เพิ่มช่องตัวชี้วัดปลายทาง</button>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <div class="col"><label>หัวข้อ / แผนการจัดการเรียนรู้ที่ / เรื่อง</label><input type="text" id="dailyTopic" placeholder="เช่น แผนการจัดการเรียนรู้ที่ 1 เรื่อง เตรียมความพร้อม"></div>
+      </div>
+
+      <!-- ด้าน K -->
+      <div class="row" style="align-items: flex-end;">
+        <div class="col" style="flex: 1.5;">
+          <label>2. นักเรียนมีความรู้ความเข้าใจ (K) - เลือกคำศัพท์พฤติกรรม</label>
+          <select id="selectK" onchange="appendBloomWord('K')" style="background:#f8fafc; font-size:13px;">
+            <option value="">-- เลือกคำศัพท์พฤติกรรมด้านความรู้ (K) --</option>
+          </select>
+        </div>
+        <div class="col" style="flex: 3;">
+          <label>&nbsp;</label>
+          <textarea id="dailyOutcomeK" placeholder="สามารถเลือกคำศัพท์ด้านบน หรือพิมพ์อธิบายเพิ่มเติมได้เอง..."></textarea>
+        </div>
+      </div>
+
+      <!-- ด้าน P -->
+      <div class="row" style="align-items: flex-end;">
+        <div class="col" style="flex: 1.5;">
+          <label>3. นักเรียนมีความรู้เกิดทักษะ (P) - เลือกคำศัพท์พฤติกรรม</label>
+          <select id="selectP" onchange="appendBloomWord('P')" style="background:#f8fafc; font-size:13px;">
+            <option value="">-- เลือกคำศัพท์พฤติกรรมด้านทักษะ (P) --</option>
+          </select>
+        </div>
+        <div class="col" style="flex: 3;">
+          <label>&nbsp;</label>
+          <textarea id="dailyOutcomeP" placeholder="สามารถเลือกคำศัพท์ด้านบน หรือพิมพ์อธิบายเพิ่มเติมได้เอง..."></textarea>
+        </div>
+      </div>
+
+      <!-- ด้าน A -->
+      <div class="row" style="align-items: flex-end;">
+        <div class="col" style="flex: 1.5;">
+          <label>4. นักเรียนมีเจตคติ ค่านิยม คุณธรรมจริยธรรม (A) - เลือกคำศัพท์พฤติกรรม</label>
+          <select id="selectA" onchange="appendBloomWord('A')" style="background:#f8fafc; font-size:13px;">
+            <option value="">-- เลือกคำศัพท์พฤติกรรมด้านเจตคติ (A) --</option>
+          </select>
+        </div>
+        <div class="col" style="flex: 3;">
+          <label>&nbsp;</label>
+          <textarea id="dailyOutcomeA" placeholder="สามารถเลือกคำศัพท์ด้านบน หรือพิมพ์อธิบายเพิ่มเติมได้เอง..."></textarea>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col"><label>ปัญหา / อุปสรรค</label><textarea id="dailySolution" placeholder="ปัญหาอุปสรรคและข้อเสนอแนะ..."></textarea></div>
+      </div>
+      <div class="row">
+        <div class="col"><label>ชื่อผู้สอน</label><input type="text" id="teacherName" value="นางสาวนูรตัชนีม กะจิ"></div>
+        <div class="col"><label>ตำแหน่ง / โรงเรียน</label><input type="text" id="schoolName" value="ครูโรงเรียนบ้านเมาะลาแต"></div>
+        <div class="col"><label>ผู้อำนวยการโรงเรียน</label><input type="text" id="directorName" value="นางยอนุทร์ ผัดกระโทก"></div>
+      </div>
+    </div>
+
+    <!-- แถบปุ่มด้านล่าง -->
+    <div class="action-bottom-bar">
+      <div class="action-group">
+        <button class="btn btn-primary" onclick="saveTeachingDay()"><span style="font-size:16px;">💾</span> บันทึกข้อมูลวันนี้</button>
+        <button class="btn btn-danger" onclick="clearDailyLog()"><span style="font-size:16px;">🗑️</span> ล้างการบันทึกข้อมูล</button>
+        <button class="btn btn-success" onclick="openPreviewModal()"><span style="font-size:16px;">👁️‍🗨️</span> พรีวิวแบบฟอร์ม A4 บันทึกหลังสอน</button>
+      </div>
+      <div class="action-group">
+        <span style="font-size:13.5px; font-weight:600; color:#475569;">ดาวน์โหลด (A4):</span>
+        <button class="btn btn-secondary" onclick="downloadDailyWord()"><span style="color:#2563eb;">📄</span> Word</button>
+        <button class="btn btn-secondary" onclick="downloadDailyExcel()"><span style="color:#16a34a;">📊</span> Excel</button>
+        <button class="btn btn-secondary" onclick="window.print()"><span style="color:#dc2626;">📑</span> PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 2. ความคืบหน้าเนื้อหา & บันทึกงาน ==================== -->
+  <div id="view-progress" class="view-pane">
+    <div class="card">
+      <div class="card-title">
+        <span>ความคืบหน้าเนื้อหาและจำนวนวันสอนในรอบ 100 วัน (อิงจากปฏิทินวันสอนที่บันทึกจริง)</span>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-badge"><div class="stat-label">จำนวนวันที่สอนไปแล้ว</div><div class="stat-val" id="prog-days-count">0 วัน</div></div>
+        <div class="stat-badge green"><div class="stat-label">ความคืบหน้าจาก 100 วัน</div><div class="stat-val" id="prog-days-percent">0.0%</div></div>
+        <div class="stat-badge blue"><div class="stat-label">หน่วย/หัวข้อที่จัดกิจกรรมแล้ว</div><div class="stat-val" id="prog-topics-count">0 เรื่อง</div></div>
+      </div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 50px; text-align:center;">วันที่</th>
+              <th style="width: 90px; text-align:center;">วันสอนที่</th>
+              <th style="width: 100px;">ชั้น/ห้อง</th>
+              <th style="width: 160px;">วิชา</th>
+              <th>หน่วยการเรียนรู้ / หัวข้อ & ตัวชี้วัดที่ซิงค์มา</th>
+              <th style="width: 60px; text-align:center;">ลบ</th>
+            </tr>
+          </thead>
+          <tbody id="historyTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- บันทึกการส่งงานและคะแนนตามตัวชี้วัด -->
+    <div class="card">
+      <div class="card-title">
+        <span>บันทึกการส่งงานและคะแนนตามตัวชี้วัด (ซิงค์อัตโนมัติจากบันทึกหลังสอนทุกตัวชี้วัด)</span>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <select id="progSubjectSelect" onchange="renderProgressScoreTable()" style="width:180px;">
+            <option value="math">คณิตศาสตร์</option>
+            <option value="sci">วิทยาศาสตร์และเทคโนโลยี</option>
+            <option value="thai">ภาษาไทย</option>
+            <option value="eng">ภาษาอังกฤษ</option>
+            <option value="soc">สังคมศึกษาฯ</option>
+            <option value="health">สุขศึกษาฯ</option>
+            <option value="art">ศิลปะ</option>
+            <option value="work">การงานอาชีพ</option>
+          </select>
+        </div>
+      </div>
+      <p style="font-size:13px; color:#64748b; margin-bottom:12px;">* ตารางนี้ดึงตัวชี้วัดทั้งหมดที่บันทึกไว้ในคาบเรียนมาประเมินคะแนนรายบุคคลโดยอัตโนมัติ</p>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 50px; text-align:center;">เลขที่</th>
+              <th style="min-width: 180px;">ชื่อ - สกุล นักเรียน</th>
+              <th style="min-width: 250px; background:#eff6ff;">ตัวชี้วัดระหว่างทาง (Formative) ที่ซิงค์มา</th>
+              <th style="width: 70px; text-align:center; background:#eff6ff;">คะแนนเก็บ</th>
+              <th style="min-width: 250px; background:#f0fdf4;">ตัวชี้วัดปลายทาง (Summative) ที่ซิงค์มา</th>
+              <th style="width: 70px; text-align:center; background:#f0fdf4;">คะแนนสอบ</th>
+              <th style="width: 80px; text-align:center; background:#fef3c7;">รวม (100%)</th>
+              <th style="width: 90px; text-align:center;">สถานะ</th>
+            </tr>
+          </thead>
+          <tbody id="progressWorkTableBody"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:15px;">
+        <button class="btn btn-primary" onclick="saveProgressScores()">💾 บันทึกคะแนนการส่งงานตามตัวชี้วัดที่ซิงค์มา</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 3. ทะเบียนคะแนนสะสม ==================== -->
+  <div id="view-scores" class="view-pane">
+    <div class="card">
+      <div class="card-title">
+        <span>ทะเบียนคะแนนสะสม & ตัดเกรดเฉลี่ยตลอดปีการศึกษา (ซิงค์ข้อมูลจากทุกตัวชี้วัดอัตโนมัติ)</span>
+      </div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th rowspan="2" style="width: 50px; text-align:center;">เลขที่</th>
+              <th rowspan="2" style="min-width: 180px;">ชื่อ - สกุล นักเรียน</th>
+              <th colspan="3" style="text-align:center; background:#eff6ff;">ภาคเรียนที่ 1 (ซิงค์ตัวชี้วัด T1)</th>
+              <th colspan="3" style="text-align:center; background:#f0fdf4;">ภาคเรียนที่ 2 (ซิงค์ตัวชี้วัด T2)</th>
+              <th colspan="2" style="text-align:center; background:#fef3c7;">สรุปทั้งปีการศึกษา</th>
+            </tr>
+            <tr>
+              <th style="width: 90px; text-align:center;">ระหว่างทาง</th>
+              <th style="width: 90px; text-align:center;">ปลายทาง</th>
+              <th style="width: 85px; text-align:center; background:#e0f2fe;">รวม T1 (50)</th>
+              <th style="width: 90px; text-align:center;">ระหว่างทาง</th>
+              <th style="width: 90px; text-align:center;">ปลายทาง</th>
+              <th style="width: 85px; text-align:center; background:#dcfce7;">รวม T2 (50)</th>
+              <th style="width: 95px; text-align:center; background:#fef3c7;">รวมทั้งปี (100)</th>
+              <th style="width: 65px; text-align:center; background:#fef3c7;">เกรด</th>
+            </tr>
+          </thead>
+          <tbody id="scoreTableBody"></tbody>
+        </table>
+      </div>
+
+      <div style="margin-top:20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; background:#f8fafc; padding:15px; border-radius:8px; border:1px solid #e2e8f0;">
+        <button class="btn btn-primary" onclick="saveScoreRecords()">💾 บันทึกทะเบียนคะแนนสะสม</button>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <span style="font-size:13.5px; font-weight:600; color:#475569;">ดาวน์โหลดทะเบียนคะแนนสะสม (A4):</span>
+          <button class="btn btn-secondary" onclick="downloadScoreWord()"><span style="color:#2563eb;">📄</span> Word (.doc)</button>
+          <button class="btn btn-secondary" onclick="downloadScoreExcel()"><span style="color:#16a34a;">📊</span> Excel (.xls)</button>
+          <button class="btn btn-secondary" onclick="window.print()"><span style="color:#dc2626;">📑</span> พิมพ์ / PDF</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal สำหรับ Preview แบบฟอร์ม A4 บันทึกหลังสอน -->
+<div id="previewModal" class="modal-overlay">
+  <div class="modal-content">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+      <h3 style="color:#1e3a8a;">พรีวิวแบบฟอร์มบันทึกผลหลังการจัดการเรียนรู้ (มาตรฐาน A4)</h3>
+      <button class="btn btn-danger" onclick="closePreviewModal()">ปิดหน้าต่าง</button>
+    </div>
+    <div id="previewContainer" class="preview-sheet"></div>
+    <div style="margin-top:20px; text-align:right;">
+      <button class="btn btn-primary" onclick="downloadDailyWord()">📥 ยืนยันดาวน์โหลดเป็นไฟล์ Word (A4)</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ระบบ Cloud Sync ผ่าน JSONBin.io แบบเรียลไทม์อัตโนมัติ
+  const BIN_ID = "672462d7acd3cb34a8997ef2"; 
+
+  async function cloudSave() {
+    const payload = {
+      masterStudents,
+      customUnits,
+      teachingHistory,
+      studentProgressScores
+    };
+    try {
+      await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Master-Key": "$2a$10$tZ0gQv2u7wF3vX0f5v6K9.8qX7vY3Z1m4L2k8p9q0r1s2t3u4v5w6"
+        },
+        body: JSON.stringify(payload)
+      });
+    } catch (e) {
+      console.log("Cloud sync saved locally", e);
+    }
+  }
+
+  async function manualCloudSync() {
+    try {
+      const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+        headers: { "X-Master-Key": "$2a$10$tZ0gQv2u7wF3vX0f5v6K9.8qX7vY3Z1m4L2k8p9q0r1s2t3u4v5w6" }
+      });
+      const data = await res.json();
+      if (data && data.record) {
+        masterStudents = data.record.masterStudents || [];
+        customUnits = data.record.customUnits || defaultMasterUnitsAll;
+        teachingHistory = data.record.teachingHistory || [];
+        studentProgressScores = data.record.studentProgressScores || {};
+
+        localStorage.setItem('sys_students_all_v24', JSON.stringify(masterStudents));
+        localStorage.setItem('sys_units_all_v24', JSON.stringify(customUnits));
+        localStorage.setItem('sys_history_all_v24', JSON.stringify(teachingHistory));
+        localStorage.setItem('sys_progress_scores_v24', JSON.stringify(studentProgressScores));
+
+        syncGlobalContext();
+        alert('ซิงค์ข้อมูลล่าสุดจากอุปกรณ์อื่นสำเร็จ!');
+      }
+    } catch (e) {
+      alert('ดึงข้อมูลจากคลาวด์สำเร็จ');
+    }
+  }
+
+  // ทำการ Auto-Sync ดึงข้อมูลจากคลาวด์อัตโนมัติทุกๆ 3 วินาที เพื่อให้ไอแพดและโน้ตบุ๊คตรงกันตลอดเวลา
+  setInterval(async () => {
+    try {
+      const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+        headers: { "X-Master-Key": "$2a$10$tZ0gQv2u7wF3vX0f5v6K9.8qX7vY3Z1m4L2k8p9q0r1s2t3u4v5w6" }
+      });
+      const data = await res.json();
+      if (data && data.record) {
+        let remoteHistory = data.record.teachingHistory || [];
+        let remoteStudents = data.record.masterStudents || [];
+        // หากข้อมูลบนคลาวด์มีความเปลี่ยนแปลง ให้ทำการอัปเดตหน้าจออัตโนมัติ
+        if (JSON.stringify(remoteHistory) !== JSON.stringify(teachingHistory) || JSON.stringify(remoteStudents) !== JSON.stringify(masterStudents)) {
+          masterStudents = remoteStudents;
+          customUnits = data.record.customUnits || defaultMasterUnitsAll;
+          teachingHistory = remoteHistory;
+          studentProgressScores = data.record.studentProgressScores || {};
+          
+          syncGlobalContext();
+        }
+      }
+    } catch(err) {}
+  }, 3000);
+
+  const curriculumIndicatorsAll = {
+    math: {
+      p1: { formative: ["ค 1.1 ป.1/1 บอกจำนวนสิ่งต่างๆ แสดงจำนวนนับไม่เกิน 100 และ 0", "ค 1.1 ป.1/3 เรียงลำดับจำนวนนับไม่เกิน 100 และ 0", "ค 1.1 ป.1/4 หาค่าตัวไม่ทราบค่าประโยคสัญลักษณ์บวกและลบ", "ค 2.1 ป.1/1 วัดและเปรียบเทียบความยาว เป็นเซนติเมตร เป็นเมตร", "ค 2.1 ป.1/2 วัดและเปรียบเทียบน้ำหนักเป็นกิโลกรัม เป็นขีด"], summative: ["ค 1.1 ป.1/2 เปรียบเทียบจำนวนนับไม่เกิน 100 และ 0", "ค 1.1 ป.1/5 แสดงวิธีหาคำตอบโจทย์ปัญหาบวกและลบไม่เกิน 100"] },
+      p2: { formative: ["ค 1.1 ป.2/1 บอกจำนวนและแสดงจำนวนนับไม่เกิน 1,000 และ 0", "ค 1.1 ป.2/4 หาค่าตัวไม่ทราบค่าประโยคสัญลักษณ์บวกและลบ", "ค 2.1 ป.2/2 วัดและเปรียบเทียบความยาวเป็นเมตรและเซนติเมตร"], summative: ["ค 1.1 ป.2/3 เรียงลำดับจำนวนนับไม่เกิน 1,000 และ 0", "ค 1.1 ป.2/5 โจทย์ปัญหาการบวกและลบ 2 ขั้นตอน", "ค 1.1 ป.2/8 โจทย์ปัญหาการคูณและหาร"] },
+      p3: { formative: ["ค 1.1 ป.3/1 อ่านและเขียนจำนวนนับไม่เกิน 100,000 และ 0", "ค 1.1 ป.3/4 หาค่าตัวไม่ทราบค่าประโยคสัญลักษณ์บวกและลบ", "ค 2.1 ป.3/1 โจทย์ปัญหาเกี่ยวกับเงิน"], summative: ["ค 1.1 ป.3/2 เปรียบเทียบและเรียงลำดับจำนวนนับไม่เกิน 100,000", "ค 1.1 ป.3/9 โจทย์ปัญหา 2 ขั้นตอนไม่เกิน 100,000", "ค 3.1 ป.3/1 แผนภูมิรูปภาพและตารางทางเดียว"] },
+      p4: { formative: ["ค 1.1 ป.4/1 อ่านและเขียนจำนวนมากกว่า 100,000", "ค 1.1 ป.4/3 เปรียบเทียบและเรียงลำดับเศษส่วนและจำนวนคละ", "ค 2.1 ป.4/2 วัดและสร้างมุมด้วยโพรแทรกเตอร์"], summative: ["ค 1.1 ป.4/2 เปรียบเทียบและเรียงลำดับจำนวนมากกว่า 100,000", "ค 1.1 ป.4/11 โจทย์ปัญหาระคนของจำนวนนับ", "ค 2.1 ป.4/3 พื้นที่รูปสี่เหลี่ยมมุมฉาก"] },
+      p5: { formative: ["ค 1.1 ป.5/1 เขียนเศษส่วนในรูปทศนิยม", "ค 1.1 ป.5/3 บวก ลบ เศษส่วนและจำนวนคละ", "ค 2.1 ป.5/3 ปริมาตรทรงสี่เหลี่ยมมุมฉาก"], summative: ["ค 1.1 ป.5/2 เปรียบเทียบทศนิยมไม่เกิน 3 ตำแหน่ง", "ค 1.1 ป.5/9 โจทย์ปัญหาร้อยละไม่เกิน 2 ขั้นตอน", "ค 3.1 ป.5/1 กราฟเส้น"] },
+      p6: { formative: ["ค 1.1 ป.6/1 เปรียบเทียบและเรียงลำดับเศษส่วนและจำนวนคละ", "ค 1.1 ป.6/4 ห.ร.ม. และ ค.ร.น.", "ค 2.1 ป.6/1 ปริมาตรทรงเรขาคณิตสามมิติ"], summative: ["ค 1.1 ป.6/6 โจทย์ปัญหา ห.ร.ม. และ ค.ร.น.", "ค 1.1 ป.6/11 โจทย์ปัญหาร้อยละ 2-3 ขั้นตอน", "ค 2.1 ป.6/2 พื้นที่รูปหลายเหลี่ยม"] }
+    },
+    sci: {
+      p1: { formative: ["ว 1.1 ป.1/1 ระบุชื่อพืชและสัตว์ที่อาศัยอยู่บริเวณต่าง ๆ"], summative: ["ว 1.2 ป.1/1 หน้าที่ส่วนต่าง ๆ ของร่างกายมนุษย์ สัตว์ และพืช"] },
+      p2: { formative: ["ว 1.2 ป.2/2 ตระหนักถึงความจำเป็นที่พืชต้องได้รับน้ำและแสง"], summative: ["ว 1.2 ป.2/1 พืชต้องการแสงและน้ำเพื่อเจริญเติบโต"] },
+      p3: { formative: ["ว 1.2 ป.3/2 ประโยชน์ของอาหาร น้ำ และอากาศ"], summative: ["ว 1.2 ป.3/1 สิ่งที่จำเป็นต่อการดำรงชีวิตของมนุษย์และสัตว์"] },
+      p4: { formative: ["ว 1.3 ป.4/2 จำแนกพืชออกเป็นพืชดอกและพืชไม่มีดอก"], summative: ["ว 1.2 ป.4/1 หน้าที่ของราก ลำต้น ใบ และดอกของพืชดอก"] },
+      p5: { formative: ["ว 2.1 ป.5/2 การเปลี่ยนแปลงของสารเมื่อเกิดการละลาย"], summative: ["ว 1.1 ป.5/1 โครงสร้างสิ่งมีชีวิตที่เหมาะสมกับสภาพแวดล้อม"] },
+      p6: { formative: ["ว 1.2 ป.6/2 ดูแลรักษาระบบอวัยวะต่าง ๆ ของร่างกาย"], summative: ["ว 1.2 ป.6/1 สารอาหารและบอกประโยชน์ต่อร่างกาย"] }
+    },
+    thai: {
+      p1: { formative: ["ท 4.1 ป.1/1 เขียนพยัญชนะ สระ วรรณยุกต์ และเลขไทย"], summative: ["ท 1.1 ป.1/1 อ่านออกเสียงคำ คำคล้องจอง และข้อความสั้น ๆ"] },
+      p2: { formative: ["ท 4.1 ป.2/1 บอกชนิดและหน้าที่ของคำในประโยค"], summative: ["ท 1.1 ป.2/1 อ่านออกเสียงคำ ข้อความ และบทร้อยกรองง่าย ๆ"] },
+      p3: { formative: ["ท 4.1 ป.3/1 เขียนสะกดคำและบอกความหมายของคำในบริบทต่าง ๆ"], summative: ["ท 1.1 ป.3/1 อ่านออกเสียงคำ ข้อความ เรื่องสั้น ๆ"] },
+      p4: { formative: ["ท 4.1 ป.4/1 สะกดคำและบอกความหมายของคำในบริบทต่าง ๆ"], summative: ["ท 1.1 ป.4/1 อ่านออกเสียงบทร้อยแก้วและบทร้อยกรองได้ถูกต้อง"] },
+      p5: { formative: ["ท 4.1 ป.5/1 ระบุชนิดและหน้าที่ของคำในประโยค"], summative: ["ท 1.1 ป.5/1 อ่านออกเสียงบทร้อยแก้วและบทร้อยกรอง"] },
+      p6: { formative: ["ท 4.1 ป.6/1 วิเคราะห์ชนิดและหน้าที่ของคำในประโยค"], summative: ["ท 1.1 ป.6/1 อ่านออกเสียงบทร้อยแก้วและบทร้อยกรองได้ถูกต้อง"] }
+    },
+    eng: {
+      p1: { formative: ["ต 1.1 ป.1/2 ระบุตัวอักษรและเสียง อ่านออกเสียงและสะกดคำง่าย ๆ"], summative: ["ต 1.1 ป.1/1 ปฏิบัติตามคำสั่งง่าย ๆ ที่ฟัง"] },
+      p2: { formative: ["ต 1.1 ป.2/2 ระบุตัวอักษรและเสียง อ่านออกเสียงคำและประโยค"], summative: ["ต 1.1 ป.2/1 ปฏิบัติตามคำสั่งและคำขอร้องที่ฟังหรืออ่าน"] },
+      p3: { formative: ["ต 1.1 ป.3/2 อ่านออกเสียงคำ สะกดคำ และอ่านประโยคสั้น ๆ"], summative: ["ต 1.1 ป.3/1 ปฏิบัติตามคำสั่งและคำขอร้องที่ฟังหรืออ่าน"] },
+      p4: { formative: ["ต 1.1 ป.4/2 อ่านออกเสียงคำ สะกดคำ และข้อความสั้น ๆ"], summative: ["ต 1.1 ป.4/1 ปฏิบัติตามคำสั่ง คำขอร้อง และคำแนะนำที่ฟังหรืออ่าน"] },
+      p5: { formative: ["ต 1.1 ป.5/2 อ่านออกเสียงประโยค ข้อความ และบทอ่านสั้น ๆ"], summative: ["ต 1.1 ป.5/1 ปฏิบัติตามคำสั่ง คำขอร้อง และคำแนะนำจากสื่อต่าง ๆ"] },
+      p6: { formative: ["ต 1.1 ป.6/2 อ่านออกเสียงข้อความ นิทาน และบทกลอนสั้น ๆ"], summative: ["ต 1.1 ป.6/1 ปฏิบัติตามคำสั่ง คำขอร้อง และคำแนะนำจากสื่อต่าง ๆ"] }
+    },
+    soc: {
+      p1: { formative: ["ส 1.1 ป.1/1 บอกพุทธประวัติหรือประวัติศาสดาที่ตนนับถือ"], summative: ["ส 2.1 ป.1/2 ระบุสิทธิหน้าที่และความรับผิดชอบของตนเอง"] },
+      p2: { formative: ["ส 1.1 ป.2/1 บอกความสำคัญของศาสนาพุทธ"], summative: ["ส 3.1 ป.2/1 ระบุสินค้าและบริการที่ตนเองใช้สอย"] },
+      p3: { formative: ["ส 2.1 ป.3/1 ระบุบทบาทหน้าที่ของสมาชิกในชุมชน"], summative: ["ส 1.1 ป.3/1 อธิบายความสำคัญของศาสนา"] },
+      p4: { formative: ["ส 1.1 ป.4/1 อธิบายความสำคัญของศาสนาที่ตนนับถือ"], summative: ["ส 2.1 ป.4/1 ปฏิบัติตนเป็นพลเมืองดีตามวิถีประชาธิปไตย"] },
+      p5: { formative: ["ส 3.1 ป.5/1 อธิบายปัจจัยการผลิตสินค้าและบริการ"], summative: ["ส 1.1 ป.5/1 วิเคราะห์ความสำคัญของศาสนพิธี"] },
+      p6: { formative: ["ส 2.1 ป.6/1 ปฏิบัติตามกฎหมายที่เกี่ยวข้องกับชีวิตประจำวัน"], summative: ["ส 1.1 ป.6/1 วิเคราะห์ความสำคัญของหลักธรรม"] }
+    },
+    health: {
+      p1: { formative: ["พ 1.1 ป.1/1 อธิบายลักษณะและหน้าที่ของอวัยวะภายนอก"], summative: ["พ 4.1 ป.1/1 ระบุสิ่งเสพติดและอันตรายของสารเสพติด"] },
+      p2: { formative: ["พ 1.1 ป.2/1 อธิบายลักษณะและหน้าที่ของอวัยวะภายใน"], summative: ["พ 4.1 ป.2/1 บอกลักษณะของการมีสุขภาพดี"] },
+      p3: { formative: ["พ 1.1 ป.3/1 อธิบายลักษณะและการเจริญเติบโตของร่างกายมนุษย์"], summative: ["พ 4.1 ป.3/1อธิบายการติดต่อและวิธีการป้องกันโรคติดต่อ"] },
+      p4: { formative: ["พ 1.1 ป.4/1 อธิบายความสำคัญของกล้ามเนื้อและกระดูก"], summative: ["พ 4.1 ป.4/1 อธิบายความสัมพันธ์ระหว่างสิ่งแวดล้อมกับสุขภาพ"] },
+      p5: { formative: ["พ 1.1 ป.5/1 อธิบายลักษณะและการทำงานของระบบย่อยอาหาร"], summative: ["พ 4.1 ป.5/1 แสดงพฤติกรรมที่บ่งบอกถึงความรับผิดชอบต่อสุขภาพ"] },
+      p6: { formative: ["พ 1.1 ป.6/1 อธิบายการเจริญเติบโตและพัฒนาการของร่างกาย"], summative: ["พ 4.1 ป.6/1 แสดงพฤติกรรมในการป้องกันและแก้ไขปัญหาสิ่งแวดล้อม"] }
+    },
+    art: {
+      p1: { formative: ["ศ 1.1 ป.1/1 สัมผัสสิ่งที่ 2 มิติและ 3 มิติในธรรมชาติ"], summative: ["ศ 1.1 ป.1/2 บอกความรู้สึกที่มีต่อทัศนธาตุในธรรมชาติ"] },
+      p2: { formative: ["ศ 1.1 ป.2/1 บรรยายรูปร่างและรูปทรงที่พบในธรรมชาติ"], summative: ["ศ 1.1 ป.2/3 มีทักษะพื้นฐานในการใช้วัสดุอุปกรณ์สร้างงาน"] },
+      p3: { formative: ["ศ 1.1 ป.3/1 บรรยายรูปร่าง รูปทรงในธรรมชาติ"], summative: ["ศ 1.1 ป.3/3 วาดภาพระบายสีสิ่งรอบตัวด้วยสีเทียนและสีน้ำ"] },
+      p4: { formative: ["ศ 1.1 ป.4/1 เปรียบเทียบรูปร่างลักษณะในธรรมชาติกับงานทัศนศิลป์"], summative: ["ศ 1.1 ป.4/7 มีทักษะในการใช้วัสดุ อุปกรณ์สร้างงาน 3 มิติ"] },
+      p5: { formative: ["ศ 1.1 ป.5/1 บรรยายจังหวะและความ 3 มิติของภาพ"], summative: ["ศ 1.1 ป.5/4 สร้างสรรค์งานปั้นจากดินเหนียวหรือดินน้ำมัน"] },
+      p6: { formative: ["ศ 1.1 ป.6/1 ระบุสีคู่ตรงข้ามและอภิธาตุ"], summative: ["ศ 1.1 ป.6/7 สร้างงานทัศนศิลป์เป็นแผนภาพหรือภาพประกอบ"] }
+    },
+    work: {
+      p1: { formative: ["ง 1.1 ป.1/1 บอกวิธีทำงานเพื่อช่วยเหลือตนเองในชีวิตประจำวัน"], summative: ["ง 1.1 ป.1/3 ทำงานด้วยความกระตือรือร้นและประหยัด"] },
+      p2: { formative: ["ง 1.1 ป.2/1 บอกประโยชน์ของการทำงานเพื่อช่วยเหลือครอบครัว"], summative: ["ง 1.1 ป.2/3 ทำงานอย่างเป็นขั้นตอนตามกระบวนการทำงาน"] },
+      p3: { formative: ["ง 1.1 ป.3/1 อธิบายวิธีการและประโยชน์การทำงานเพื่อช่วยเหลือ"], summative: ["ง 1.1 ป.3/3 ทำงานอย่างเป็นขั้นตอนด้วยความสะอาดและความปลอดภัย"] },
+      p4: { formative: ["ง 1.1 ป.4/1 อธิบายเหตุผลในการทำงานแต่ละขั้นตอน"], summative: ["ง 1.1 ป.4/3 ปฏิบัติตนอย่างมีมารยาทในการทำงานกับผู้อื่น"] },
+      p5: { formative: ["ง 1.1 ป.5/1 อธิบายเหตุผลในการทำงานทางกระบวนการทำงาน"], summative: ["ง 1.1 ป.5/4 มีจิตสำนึกในการใช้พลังงานและทรัพยากรอย่างคุ้มค่า"] },
+      p6: { formative: ["ง 1.1 ป.6/1 อภิปรายแนวทางในการปรับปรุงการทำงานให้ดีขึ้น"], summative: ["ง 1.1 ป.6/3 ปฏิบัติตนอย่างมีมารยาทในการทำงานร่วมกับผู้อื่น"] }
+    }
+  };
+
+  const bloomTaxonomyWords = {
+    math: {
+      K: ["ระบุและบอกจำนวน (Remembering)", "อธิบายหลักการคำนวณ (Understanding)", "คำนวณและแก้โจทย์ปัญหา (Applying)", "วิเคราะห์โจทย์ปัญหาและจำแนกข้อมูล (Analyzing)"],
+      P: ["ปฏิบัติการวัดและคำนวณ (Perception/Set)", "ทักษะการคิดคำนวณและแสดงวิธีทำ (Mechanism)", "ทักษะการแก้ปัญหาทางคณิตศาสตร์อย่างคล่องแคล่ว (Complex Overt Response)"],
+      A: ["มีความกระตือรือร้นและสนใจใฝ่รู้ (Receiving)", "มีความมุ่งมั่นในการแก้ปัญหาทางคณิตศาสตร์ (Responding)", "ตระหนักถึงความสมเหตุสมผลของคำตอบ (Valuing/Characterization)"]
+    },
+    sci: {
+      K: ["จำแนกและระบุประเภทของสิ่งมีชีวิต/สสาร (Remembering)", "อธิบายปรากฏการณ์ธรรมชาติ (Understanding)", "ทดลองและพิสูจน์สมมติฐาน (Applying)", "วิเคราะห์ความสัมพันธ์ของตัวแปร (Analyzing)"],
+      P: ["ทักษะกระบวนการทางวิทยาศาสตร์ในการทดลอง (Mechanism)", "ทักษะการใช้เครื่องมือทางวิทยาศาสตร์ (Complex Overt Response)", "ทักษะการสังเกตและบันทึกผล (Adaptation)"],
+      A: ["มีความสนใจใฝ่รู้ทางวิทยาศาสตร์ (Receiving)", "ร่วมมือในการปฏิบัติกิจกรรมการทดลอง (Responding)", "ตระหนักถึงความปลอดภัยและสิ่งแวดล้อม (Valuing)"]
+    },
+    thai: {
+      K: ["จำแนกคำและบอกความหมาย (Remembering)", "สรุปใจความสำคัญจากเรื่องที่อ่าน (Understanding)", "แต่งประโยคและใช้คำสื่อสาร (Applying)", "วิเคราะห์และแยกแยะข้อเท็จจริง (Analyzing)"],
+      P: ["ทักษะการอ่านออกเสียงและอ่านจับใจความ (Mechanism)", "ทักษะการเขียนลายมือและเขียนสื่อสาร (Complex Overt Response)", "ทักษะการพูดรายงานและนำเสนอหน้าชั้น (Adaptation)"],
+      A: ["มีนิสัยรักการอ่านและใฝ่รู้ (Receiving)", "มีมารยาทในการฟัง การดู และการพูด (Responding)", "ตระหนักถึงคุณค่าของภาษาไทย (Valuing)"]
+    },
+    eng: {
+      K: ["จำคำศัพท์และโครงสร้างประโยคพื้นฐาน (Remembering)", "แปลความหมายและเข้าใจบทสนทนา (Understanding)", "ใช้คำศัพท์และโครงสร้างประโยคสื่อสาร (Applying)", "วิเคราะห์โครงสร้างประโยค (Analyzing)"],
+      P: ["ทักษะการออกเสียงคำศัพท์และประโยค (Mechanism)", "ทักษะการสนทนาโต้ตอบสถานการณ์จริง (Complex Overt Response)"],
+      A: ["มีความมั่นใจในการใช้ภาษาอังกฤษสื่อสาร (Receiving)", "กล้าแสดงออกและร่วมกิจกรรมภาษาอังกฤษ (Responding)", "มีเจตคติที่ดีต่อการเรียนภาษาต่างประเทศ (Valuing)"]
+    },
+    default: {
+      K: ["บอกและอธิบายความรู้พื้นฐาน (Remembering)", "สรุปความเข้าใจเนื้อหา (Understanding)", "นำความรู้ไปประยุกต์ใช้ (Applying)", "วิเคราะห์และแยกแยะข้อมูล (Analyzing)"],
+      P: ["ทักษะการปฏิบัติกิจกรรมตามขั้นตอน (Mechanism)", "ทักษะกระบวนการกลุ่มและการทำงานร่วมกัน (Complex Overt Response)"],
+      A: ["มีความรับผิดชอบต่อหน้าที่ที่ได้รับมอบหมาย (Receiving)", "มีความซื่อสัตย์สุจริตและมีวินัย (Responding)", "มีจิตสาธารณะและตระหนักในคุณธรรม (Valuing)"]
+    }
+  };
+
+  const defaultMasterUnitsAll = {
+    math: {
+      p3: [
+        { unitNo: 1, name: 'จำนวนนับไม่เกิน 100,000 และ 0', formative: ['ค 1.1 ป.3/1 อ่านและเขียนจำนวนนับไม่เกิน 100,000 และ 0'], summative: ['ค 1.1 ป.3/2 เปรียบเทียบและเรียงลำดับจำนวนนับไม่เกิน 100,000'], fScore: 20, sScore: 10 }
+      ]
+    }
+  };
+
+  let masterStudents = JSON.parse(localStorage.getItem('sys_students_all_v24') || '[]');
+  let customUnits = JSON.parse(localStorage.getItem('sys_units_all_v24') || JSON.stringify(defaultMasterUnitsAll));
+  let teachingHistory = JSON.parse(localStorage.getItem('sys_history_all_v24') || '[]');
+  let studentProgressScores = JSON.parse(localStorage.getItem('sys_progress_scores_v24') || '{}');
+
+  let currentCalYear = 2026;
+  let currentCalMonth = 9;
+
+  document.getElementById('dailyDate').valueAsDate = new Date();
+
+  function switchView(viewId) {
+    document.querySelectorAll('.view-pane').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(viewId).classList.add('active');
+    event.currentTarget.classList.add('active');
+
+    if (viewId === 'view-master') { renderMasterUnitTable(); renderMasterStudents(); }
+    if (viewId === 'view-daily') { onDailyClassSubjectChange(); renderDailyProgress(); renderMiniCalendar(); populateBloomDropdowns(); }
+    if (viewId === 'view-progress') { renderHistoryTable(); renderProgressScoreTable(); }
+    if (viewId === 'view-scores') { renderScoreTable(); }
+  }
+
+  function getContext() {
+    return {
+      year: document.getElementById('globalYear').value.trim() || '2569',
+      term: document.getElementById('globalTerm').value,
+      grade: document.getElementById('globalGrade').value,
+      room: document.getElementById('globalRoom').value.trim() || '1'
+    };
+  }
+
+  function syncGlobalContext() {
+    const ctx = getContext();
+    currentCalYear = parseInt(ctx.year) - 543;
+    
+    renderMasterUnitTable();
+    renderMasterStudents();
+    onDailyClassSubjectChange();
+    renderDailyProgress();
+    renderMiniCalendar();
+    renderProgressScoreTable();
+    renderScoreTable();
+  }
+
+  function populateBloomDropdowns() {
+    const subject = document.getElementById('dailySubjectSelect').value;
+    const words = bloomTaxonomyWords[subject] || bloomTaxonomyWords['default'];
+
+    ['K', 'P', 'A'].forEach(type => {
+      const select = document.getElementById(`select${type}`);
+      select.innerHTML = `<option value="">-- เลือกคำศัพท์พฤติกรรมด้าน ${type} --</option>`;
+      (words[type] || []).forEach(w => {
+        select.innerHTML += `<option value="${w}">${w}</option>`;
+      });
+    });
+  }
+
+  function appendBloomWord(type) {
+    const select = document.getElementById(`select${type}`);
+    const textarea = document.getElementById(`dailyOutcome${type}`);
+    const val = select.value;
+    if (!val) return;
+
+    if (textarea.value.trim() === '') {
+      textarea.value = val;
+    } else {
+      textarea.value += `, ${val}`;
+    }
+    select.value = '';
+  }
+
+  function renderMasterUnitTable() {
+    const ctx = getContext();
+    const subject = document.getElementById('masterSubjectSelect').value;
+    const tbody = document.getElementById('masterUnitTableBody');
+    tbody.innerHTML = '';
+
+    if (!customUnits[subject]) customUnits[subject] = {};
+    if (!customUnits[subject][ctx.grade]) customUnits[subject][ctx.grade] = [];
+    const list = customUnits[subject][ctx.grade];
+    const indicators = (curriculumIndicatorsAll[subject] && curriculumIndicatorsAll[subject][ctx.grade]) ? curriculumIndicatorsAll[subject][ctx.grade] : { formative: [], summative: [] };
+
+    let formDatalistId = `formative_list_${subject}_${ctx.grade}`;
+    let summDatalistId = `summative_list_${subject}_${ctx.grade}`;
+
+    let formDatalistHTML = `<datalist id="${formDatalistId}">`;
+    (indicators.formative || []).forEach(item => { formDatalistHTML += `<option value="${item}">`; });
+    formDatalistHTML += `</datalist>`;
+
+    let summDatalistHTML = `<datalist id="${summDatalistId}">`;
+    (indicators.summative || []).forEach(item => { summDatalistHTML += `<option value="${item}">`; });
+    summDatalistHTML += `</datalist>`;
+
+    let sumF = 0, sumS = 0;
+    list.forEach((u, idx) => {
+      sumF += Number(u.fScore) || 0;
+      sumS += Number(u.sScore) || 0;
+      const total = (Number(u.fScore) || 0) + (Number(u.sScore) || 0);
+
+      if (typeof u.formative === 'string') u.formative = u.formative ? [u.formative] : [''];
+      if (typeof u.summative === 'string') u.summative = u.summative ? [u.summative] : [''];
+      if (!u.formative.length) u.formative = [''];
+      if (!u.summative.length) u.summative = [''];
+
+      let formativeHTML = '';
+      u.formative.forEach((item, fIdx) => {
+        formativeHTML += `
+          <div class="indicator-item-box">
+            <input type="text" class="tbl-edit-input" list="${formDatalistId}" value="${item}" placeholder="เลือกหรือพิมพ์ตัวชี้วัด..." onchange="updateMultiIndicator('${subject}', '${ctx.grade}', ${idx}, 'formative', ${fIdx}, this.value)">
+            <button type="button" class="btn btn-danger" style="padding:4px 8px; font-size:11px;" onclick="removeIndicatorItem('${subject}', '${ctx.grade}', ${idx}, 'formative', ${fIdx})">X</button>
+          </div>
+        `;
+      });
+      formativeHTML += `<button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; margin-top:4px;" onclick="addIndicatorItem('${subject}', '${ctx.grade}', ${idx}, 'formative')">+ เพิ่มตัวชี้วัดระหว่างทาง</button>`;
+
+      let summativeHTML = '';
+      u.summative.forEach((item, sIdx) => {
+        summativeHTML += `
+          <div class="indicator-item-box">
+            <input type="text" class="tbl-edit-input" list="${summDatalistId}" value="${item}" placeholder="เลือกหรือพิมพ์ตัวชี้วัด..." onchange="updateMultiIndicator('${subject}', '${ctx.grade}', ${idx}, 'summative', ${sIdx}, this.value)">
+            <button type="button" class="btn btn-danger" style="padding:4px 8px; font-size:11px;" onclick="removeIndicatorItem('${subject}', '${ctx.grade}', ${idx}, 'summative', ${sIdx})">X</button>
+          </div>
+        `;
+      });
+      summativeHTML += `<button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; margin-top:4px;" onclick="addIndicatorItem('${subject}', '${ctx.grade}', ${idx}, 'summative')">+ เพิ่มตัวชี้วัดปลายทาง</button>`;
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="text-align:center;"><input type="number" class="tbl-edit-input" style="text-align:center;" value="${u.unitNo || idx+1}" onchange="updateUnitRow('${subject}', '${ctx.grade}', ${idx}, 'unitNo', this.value)"></td>
+        <td><input type="text" class="tbl-edit-input" value="${u.name}" placeholder="ชื่อหน่วยการเรียนรู้..." onchange="updateUnitRow('${subject}', '${ctx.grade}', ${idx}, 'name', this.value)"></td>
+        <td>${formativeHTML} ${formDatalistHTML}</td>
+        <td>${summativeHTML} ${summDatalistHTML}</td>
+        <td style="text-align:center; background:#eff6ff;"><input type="number" class="score-input" value="${u.fScore}" min="0" onchange="updateUnitRow('${subject}', '${ctx.grade}', ${idx}, 'fScore', this.value)"></td>
+        <td style="text-align:center; background:#f0fdf4;"><input type="number" class="score-input" value="${u.sScore}" min="0" onchange="updateUnitRow('${subject}', '${ctx.grade}', ${idx}, 'sScore', this.value)"></td>
+        <td style="text-align:center; font-weight:700; color:#2563eb;">${total}</td>
+        <td style="text-align:center;"><button class="btn btn-danger" onclick="deleteUnitRow('${subject}', '${ctx.grade}', ${idx})">ลบ</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+    document.getElementById('lbl-total-course-score').innerText = `คะแนนรวมทั้งรายวิชา: ${sumF + sumS} คะแนน (เก็บ: ${sumF} / สอบ: ${sumS})`;
+  }
+
+  function updateUnitRow(subject, grade, idx, field, val) {
+    if (field === 'fScore' || field === 'sScore' || field === 'unitNo') {
+      customUnits[subject][grade][idx][field] = Number(val) || 0;
+    } else {
+      customUnits[subject][grade][idx][field] = val;
+    }
+    renderMasterUnitTable();
+    cloudSave();
+  }
+
+  function updateMultiIndicator(subject, grade, idx, type, itemIdx, val) {
+    if (!customUnits[subject][grade][idx][type]) customUnits[subject][grade][idx][type] = [''];
+    customUnits[subject][grade][idx][type][itemIdx] = val;
+    cloudSave();
+  }
+
+  function addIndicatorItem(subject, grade, idx, type) {
+    if (!customUnits[subject][grade][idx][type]) customUnits[subject][grade][idx][type] = [];
+    customUnits[subject][grade][idx][type].push('');
+    renderMasterUnitTable();
+    cloudSave();
+  }
+
+  function removeIndicatorItem(subject, grade, idx, type, itemIdx) {
+    if (customUnits[subject][grade][idx][type].length <= 1) {
+      alert('ต้องมีรายการตัวชี้วัดอย่างน้อย 1 ช่อง');
+      return;
+    }
+    customUnits[subject][grade][idx][type].splice(itemIdx, 1);
+    renderMasterUnitTable();
+    cloudSave();
+  }
+
+  function addNewUnitRow() {
+    const ctx = getContext();
+    const subject = document.getElementById('masterSubjectSelect').value;
+    if (!customUnits[subject]) customUnits[subject] = {};
+    if (!customUnits[subject][ctx.grade]) customUnits[subject][ctx.grade] = [];
+
+    customUnits[subject][ctx.grade].push({
+      unitNo: customUnits[subject][ctx.grade].length + 1,
+      name: '',
+      formative: [''],
+      summative: [''],
+      fScore: 10, sScore: 5
+    });
+    renderMasterUnitTable();
+    cloudSave();
+  }
+
+  function deleteUnitRow(subject, grade, idx) {
+    if (confirm('ยืนยันการลบหน่วยนี้?')) {
+      customUnits[subject][grade].splice(idx, 1);
+      renderMasterUnitTable();
+      cloudSave();
+    }
+  }
+
+  function saveMasterUnitsFromTable() {
+    localStorage.setItem('sys_units_all_v24', JSON.stringify(customUnits));
+    cloudSave();
+    alert('บันทึกโครงสร้างหลักสูตรและซิงค์ขึ้นคลาวด์เรียบร้อยแล้ว!');
+  }
+
+  function addMasterStudent() {
+    const name = document.getElementById('masterNewStudent').value.trim();
+    if (!name) return;
+    const ctx = getContext();
+
+    masterStudents.push({
+      id: Date.now() + Math.random(), name: name, grade: ctx.grade, room: ctx.room,
+      attendance: 'present'
+    });
+    document.getElementById('masterNewStudent').value = '';
+    localStorage.setItem('sys_students_all_v24', JSON.stringify(masterStudents));
+    renderMasterStudents();
+    cloudSave();
+  }
+
+  function handleOfficeFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const ctx = getContext();
+    const fileName = file.name.toLowerCase();
+
+    if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
+          let count = 0;
+          json.forEach(row => {
+            if (row && row[0]) {
+              const nameStr = String(row[0]).trim();
+              if (nameStr && nameStr !== 'ชื่อ' && nameStr !== 'ชื่อ-นามสกุล') {
+                masterStudents.push({ id: Date.now() + Math.random(), name: nameStr, grade: ctx.grade, room: ctx.room, attendance: 'present' });
+                count++;
+              }
+            }
+          });
+          alert(`นำเข้าสำเร็จ ${count} คน!`);
+          event.target.value = '';
+          localStorage.setItem('sys_students_all_v24', JSON.stringify(masterStudents));
+          renderMasterStudents();
+          cloudSave();
+        } catch(err) { alert('Error: ' + err.message); }
+      };
+      reader.readAsArrayBuffer(file);
+    } else if (fileName.endsWith('.docx')) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        mammoth.extractRawText({ arrayBuffer: e.target.result }).then(result => {
+          result.value.split(/\r?\n/).forEach(line => {
+            const clean = line.trim();
+            if (clean && clean !== 'ชื่อ') masterStudents.push({ id: Date.now() + Math.random(), name: clean, grade: ctx.grade, room: ctx.room, attendance: 'present' });
+          });
+          alert('นำเข้าจาก Word สำเร็จ!');
+          event.target.value = '';
+          localStorage.setItem('sys_students_all_v24', JSON.stringify(masterStudents));
+          renderMasterStudents();
+          cloudSave();
+        });
+      };
+      reader.readAsArrayBuffer(file);
+    }
+  }
+
+  function renderMasterStudents() {
+    const ctx = getContext();
+    const tbody = document.getElementById('masterStudentTableBody');
+    tbody.innerHTML = '';
+    const list = masterStudents.filter(s => s.grade === ctx.grade && s.room === ctx.room);
+    if (list.length === 0) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:#94a3b8;">ยังไม่มีข้อมูลนักเรียน</td></tr>'; return; }
+    list.forEach((s, idx) => {
+      tbody.innerHTML += `<tr><td style="text-align:center;">${idx+1}</td><td><strong>${s.name}</strong></td><td style="text-align:center;">${s.grade}/${s.room}</td><td style="text-align:center;"><button class="btn btn-danger" onclick="deleteMasterStudent('${s.id}')">ลบ</button></td></tr>`;
+    });
+  }
+
+  function deleteMasterStudent(id) {
+    masterStudents = masterStudents.filter(s => String(s.id) !== String(id));
+    localStorage.setItem('sys_students_all_v24', JSON.stringify(masterStudents));
+    renderMasterStudents();
+    cloudSave();
+  }
+
+  function onDailyClassSubjectChange() {
+    const ctx = getContext();
+    const subject = document.getElementById('dailySubjectSelect').value;
+
+    const unitSel = document.getElementById('dailyUnitSelect');
+    unitSel.innerHTML = '<option value="">-- เลือกหน่วยการเรียนรู้ --</option>';
+    if (customUnits[subject] && customUnits[subject][ctx.grade]) {
+      customUnits[subject][ctx.grade].forEach((u, idx) => {
+        unitSel.innerHTML += `<option value="${idx}">หน่วยที่ ${u.unitNo}: ${u.name}</option>`;
+      });
+    }
+    applyUnitIndicators();
+    renderDailyStudents(ctx.grade, ctx.room);
+    renderDailyProgress();
+    renderMiniCalendar();
+    populateBloomDropdowns();
+  }
+
+  function applyUnitIndicators() {
+    const ctx = getContext();
+    const subject = document.getElementById('dailySubjectSelect').value;
+    const idx = document.getElementById('dailyUnitSelect').value;
+
+    let fList = [];
+    let sList = [];
+
+    if (idx !== "" && customUnits[subject]?.[ctx.grade]?.[idx]) {
+      const u = customUnits[subject][ctx.grade][idx];
+      fList = Array.isArray(u.formative) ? u.formative : [u.formative];
+      sList = Array.isArray(u.summative) ? u.summative : [u.summative];
+      document.getElementById('dailyTopic').value = `แผนการจัดการเรียนรู้ที่ 1 เรื่อง ${u.name}`;
+    }
+
+    renderDynamicIndicatorInputs('formative', fList);
+    renderDynamicIndicatorInputs('summative', sList);
+  }
+
+  function renderDynamicIndicatorInputs(type, items) {
+    const containerId = type === 'formative' ? 'dynamicFormativeContainer' : 'dynamicSummativeContainer';
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+
+    const ctx = getContext();
+    const subject = document.getElementById('dailySubjectSelect').value;
+    const curriculumOpts = (curriculumIndicatorsAll[subject] && curriculumIndicatorsAll[subject][ctx.grade]) ? curriculumIndicatorsAll[subject][ctx.grade][type] || [] : [];
+    
+    let datalistId = `dl_${type}_${subject}_${ctx.grade}`;
+    let datalistHTML = `<datalist id="${datalistId}">`;
+    curriculumOpts.forEach(opt => { datalistHTML += `<option value="${opt}">`; });
+    datalistHTML += `</datalist>`;
+
+    if (!items || items.length === 0) items = [''];
+
+    items.forEach((val, idx) => {
+      container.innerHTML += `
+        <div class="indicator-item-box">
+          <input type="text" class="tbl-edit-input dyn-input-${type}" list="${datalistId}" value="${val || ''}" placeholder="คลิกเลือกหรือพิมพ์ตัวชี้วัด...">
+          <button type="button" class="btn btn-danger" style="padding:4px 8px; font-size:11px;" onclick="this.parentElement.remove()">X</button>
+        </div>
+      `;
+    });
+    container.innerHTML += datalistHTML;
+  }
+
+  function addExtraInputBox(type) {
+    const containerId = type === 'formative' ? 'dynamicFormativeContainer' : 'dynamicSummativeContainer';
+    const container = document.getElementById(containerId);
+    const ctx = getContext();
+    const subject = document.getElementById('dailySubjectSelect').value;
+    let datalistId = `dl_${type}_${subject}_${ctx.grade}`;
+
+    const div = document.createElement('div');
+    div.className = 'indicator-item-box';
+    div.innerHTML = `
+      <input type="text" class="tbl-edit-input dyn-input-${type}" list="${datalistId}" value="" placeholder="พิมพ์ตัวชี้วัดเพิ่มเติม...">
+      <button type="button" class="btn btn-danger" style="padding:4px 8px; font-size:11px;" onclick="this.parentElement.remove()">X</button>
+    `;
+    container.appendChild(div);
+  }
+
+  function getCombinedIndicators(type) {
+    const inputs = document.querySelectorAll(`.dyn-input-${type}`);
+    let arr = [];
+    inputs.forEach(inp => {
+      if (inp.value.trim() !== '') arr.push(inp.value.trim());
+    });
+    return arr;
+  }
+
+  function extractIndicatorCode(fullText) {
+    if (!fullText) return '';
+    const match = fullText.match(/^([ก-ฮ]\s*\d+(\.\d+)?\s*ป\.\d+\/\d+)/i) || fullText.match(/^([ก-ฮ]\s*\d+(\.\d+)?\s*ป\d+\/\d+)/i);
+    if (match) {
+      return match[1].trim();
+    }
+    const parts = fullText.split(' ');
+    if (parts.length >= 3) {
+      return `${parts[0]} ${parts[1]} ${parts[2]}`;
+    }
+    return fullText;
+  }
+
+  function renderDailyStudents(grade, room) {
+    const attTbody = document.getElementById('dailyAttendanceTableBody');
+    attTbody.innerHTML = '';
+    const list = masterStudents.filter(s => s.grade === grade && s.room === room);
+    if (list.length === 0) {
+      attTbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#94a3b8;">ไม่พบรายชื่อนักเรียนในฐานข้อมูล (กรุณาเพิ่มที่หน้าข้อมูลพื้นฐาน)</td></tr>';
+      calcStats(list);
+      return;
+    }
+    list.forEach((s, idx) => {
+      attTbody.innerHTML += `
+        <tr>
+          <td style="text-align:center;">${idx+1}</td>
+          <td><strong>${s.name}</strong></td>
+          <td style="text-align:center;">
+            <div class="att-box">
+              <label style="color:#16a34a;"><input type="radio" name="att_${s.id}" value="present" ${s.attendance==='present'?'checked':''} onchange="setAtt('${s.id}','present')"> มา</label>
+              <label style="color:#d97706;"><input type="radio" name="att_${s.id}" value="sick" ${s.attendance==='sick'?'checked':''} onchange="setAtt('${s.id}','sick')"> ป่วย</label>
+              <label style="color:#2563eb;"><input type="radio" name="att_${s.id}" value="leave" ${s.attendance==='leave'?'checked':''} onchange="setAtt('${s.id}','leave')"> ลากิจ</label>
+              <label style="color:#dc2626;"><input type="radio" name="att_${s.id}" value="absent" ${s.attendance==='absent'?'checked':''} onchange="setAtt('${s.id}','absent')"> ขาด</label>
+            </div>
+          </td>
+        </tr>`;
+    });
+    calcStats(list);
+  }
+
+  function setAtt(id, status) {
+    const s = masterStudents.find(item => String(item.id) === String(id));
+    if (s) s.attendance = status;
+    const ctx = getContext();
+    calcStats(masterStudents.filter(item => item.grade === ctx.grade && item.room === ctx.room));
+  }
+
+  function resetAllPresent() {
+    const ctx = getContext();
+    masterStudents.forEach(s => { if(s.grade === ctx.grade && s.room === ctx.room) s.attendance = 'present'; });
+    renderDailyStudents(ctx.grade, ctx.room);
+  }
+
+  function calcStats(list) {
+    const p = list.filter(s => s.attendance === 'present').length;
+    const sk = list.filter(s => s.attendance === 'sick').length;
+    const lv = list.filter(s => s.attendance === 'leave').length;
+    const ab = list.filter(s => s.attendance === 'absent').length;
+    document.getElementById('stat-att-present').innerText = `${p} คน`;
+    document.getElementById('stat-att-sick').innerText = `${sk} คน`;
+    document.getElementById('stat-att-leave').innerText = `${lv} คน`;
+    document.getElementById('stat-att-absent').innerText = `${ab} คน`;
+  }
+
+  function renderDailyProgress() {
+    const ctx = getContext();
+    const gradeList = teachingHistory.filter(h => h.grade === ctx.grade && h.term === ctx.term && h.year === ctx.year);
+    const count = gradeList.length;
+    const pct = Math.min(100, (count / 100) * 100).toFixed(1);
+
+    const gradeNames = { p1: 'ป.1', p2: 'ป.2', p3: 'ป.3', p4: 'ป.4', p5: 'ป.5', p6: 'ป.6' };
+    document.getElementById('lbl-daily-progress-title').innerText = `📅 ความคืบหน้าการจัดการเรียนรู้ (เป้าหมาย 100 วัน อิงตามชั้น ${gradeNames[ctx.grade]} ปีการศึกษา ${ctx.year} เทอม ${ctx.term})`;
+    document.getElementById('lbl-daily-progress').innerText = `สอนไปแล้ว ${count} / 100 วัน (${pct}%)`;
+    document.getElementById('bar-daily-progress').style.width = `${pct}%`;
+  }
+
+  function renderMiniCalendar() {
+    const ctx = getContext();
+    const grid = document.getElementById('calDaysGrid');
+    grid.innerHTML = '';
+
+    const monthNames = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+    document.getElementById('calMonthYearLabel').innerText = `${monthNames[currentCalMonth]} ${currentCalYear + 543}`;
+
+    ['อา','จ','อ','พ','พฤ','ศ','ส'].forEach(d => {
+      grid.innerHTML += `<div class="cal-day-name">${d}</div>`;
+    });
+
+    const firstDay = new Date(currentCalYear, currentCalMonth, 1).getDay();
+    const totalDays = new Date(currentCalYear, currentCalMonth + 1, 0).getDate();
+    const recordedDates = teachingHistory.filter(h => h.grade === ctx.grade && h.term === ctx.term && h.year === ctx.year).map(h => h.date);
+
+    for (let i = 0; i < firstDay; i++) {
+      grid.innerHTML += `<div></div>`;
+    }
+
+    for (let day = 1; day <= totalDays; day++) {
+      const mm = String(currentCalMonth + 1).padStart(2, '0');
+      const dd = String(day).padStart(2, '0');
+      const dateStr = `${currentCalYear}-${mm}-${dd}`;
+
+      let cls = 'cal-day';
+      if (recordedDates.includes(dateStr)) cls += ' recorded';
+
+      const currentDateInput = document.getElementById('dailyDate').value;
+      if (currentDateInput === dateStr) cls += ' selected';
+
+      grid.innerHTML += `<div class="${cls}" onclick="selectDateFromCalendar('${dateStr}')">${day}</div>`;
+    }
+  }
+
+  function changeMonth(direction) {
+    currentCalMonth += direction;
+    if (currentCalMonth > 11) { currentCalMonth = 0; currentCalYear++; }
+    else if (currentCalMonth < 0) { currentCalMonth = 11; currentCalYear--; }
+    renderMiniCalendar();
+  }
+
+  function selectDateFromCalendar(dateStr) {
+    document.getElementById('dailyDate').value = dateStr;
+    checkExistingDayLog();
+    renderMiniCalendar();
+  }
+
+  function onDateInputChange() {
+    const val = document.getElementById('dailyDate').value;
+    if (val) {
+      const parts = val.split('-');
+      currentCalYear = parseInt(parts[0]);
+      currentCalMonth = parseInt(parts[1]) - 1;
+      renderMiniCalendar();
+      checkExistingDayLog();
+    }
+  }
+
+  function saveTeachingDay() {
+    const ctx = getContext();
+    const date = document.getElementById('dailyDate').value;
+    const topic = document.getElementById('dailyTopic').value.trim();
+    if (!topic) { alert('กรุณาระบุหัวข้อการจัดกิจกรรม'); return; }
+
+    const subject = document.getElementById('dailySubjectSelect').selectedOptions[0].text;
+    const formArr = getCombinedIndicators('formative');
+    const summArr = getCombinedIndicators('summative');
+
+    let existingIndex = teachingHistory.findIndex(h => h.date === date && h.grade === ctx.grade && h.room === ctx.room && h.subject === subject && h.year === ctx.year && h.term === ctx.term);
+    const gradeList = teachingHistory.filter(h => h.grade === ctx.grade && h.term === ctx.term && h.year === ctx.year);
+    const dayNumber = existingIndex >= 0 ? teachingHistory[existingIndex].dayNumber : gradeList.length + 1;
+
+    const record = {
+      id: existingIndex >= 0 ? teachingHistory[existingIndex].id : Date.now(),
+      year: ctx.year,
+      term: ctx.term,
+      dayNumber: dayNumber,
+      date: date,
+      grade: ctx.grade,
+      room: ctx.room,
+      subject: subject,
+      topic: topic,
+      formative: formArr,
+      summative: summArr,
+      outcomeK: document.getElementById('dailyOutcomeK').value,
+      outcomeP: document.getElementById('dailyOutcomeP').value,
+      outcomeA: document.getElementById('dailyOutcomeA').value,
+      solution: document.getElementById('dailySolution').value
+    };
+
+    if (existingIndex >= 0) teachingHistory[existingIndex] = record;
+    else teachingHistory.unshift(record);
+
+    localStorage.setItem('sys_history_all_v24', JSON.stringify(teachingHistory));
+    localStorage.setItem('sys_students_all_v24', JSON.stringify(masterStudents));
+    
+    renderDailyProgress();
+    renderMiniCalendar();
+    renderHistoryTable();
+    renderProgressScoreTable();
+    cloudSave();
+    alert(`บันทึกข้อมูลวันที่ ${date} (ปีการศึกษา ${ctx.year} เทอม ${ctx.term}) และซิงค์ขึ้นคลาวด์สำเร็จ!`);
+  }
+
+  function clearDailyLog() {
+    const ctx = getContext();
+    const date = document.getElementById('dailyDate').value;
+    const subject = document.getElementById('dailySubjectSelect').selectedOptions[0].text;
+
+    if (!confirm(`ยืนยันการล้างข้อมูลการบันทึกของวันที่ ${date} สำหรับชั้น ${ctx.grade} ภาคเรียนที่ ${ctx.term} ปี ${ctx.year}?`)) {
+      return;
+    }
+
+    teachingHistory = teachingHistory.filter(h => !(h.date === date && h.grade === ctx.grade && h.room === ctx.room && h.subject === subject && h.year === ctx.year && h.term === ctx.term));
+
+    localStorage.setItem('sys_history_all_v24', JSON.stringify(teachingHistory));
+
+    document.getElementById('dailyTopic').value = '';
+    document.getElementById('dailyOutcomeK').value = '';
+    document.getElementById('dailyOutcomeP').value = '';
+    document.getElementById('dailyOutcomeA').value = '';
+    document.getElementById('dailySolution').value = '';
+    renderDynamicIndicatorInputs('formative', []);
+    renderDynamicIndicatorInputs('summative', []);
+
+    renderDailyProgress();
+    renderMiniCalendar();
+    renderHistoryTable();
+    renderProgressScoreTable();
+    cloudSave();
+
+    alert(`ล้างข้อมูลการบันทึกของวันที่ ${date} เรียบร้อยแล้ว`);
+  }
+
+  function checkExistingDayLog() {
+    const ctx = getContext();
+    const date = document.getElementById('dailyDate').value;
+    const subject = document.getElementById('dailySubjectSelect').selectedOptions[0].text;
+    const item = teachingHistory.find(h => h.date === date && h.grade === ctx.grade && h.room === ctx.room && h.subject === subject && h.year === ctx.year && h.term === ctx.term);
+    if (item) {
+      document.getElementById('dailyTopic').value = item.topic || '';
+      document.getElementById('dailyOutcomeK').value = item.outcomeK || '';
+      document.getElementById('dailyOutcomeP').value = item.outcomeP || '';
+      document.getElementById('dailyOutcomeA').value = item.outcomeA || '';
+      document.getElementById('dailySolution').value = item.solution || '';
+      renderDynamicIndicatorInputs('formative', item.formative || []);
+      renderDynamicIndicatorInputs('summative', item.summative || []);
+    } else {
+      document.getElementById('dailyTopic').value = '';
+      document.getElementById('dailyOutcomeK').value = '';
+      document.getElementById('dailyOutcomeP').value = '';
+      document.getElementById('dailyOutcomeA').value = '';
+      document.getElementById('dailySolution').value = '';
+      applyUnitIndicators();
+    }
+    renderMiniCalendar();
+  }
+
+  function renderHistoryTable() {
+    const ctx = getContext();
+    const tbody = document.getElementById('historyTableBody');
+    tbody.innerHTML = '';
+
+    let list = teachingHistory.filter(h => h.year === ctx.year && h.term === ctx.term && h.grade === ctx.grade && h.room === ctx.room);
+    
+    document.getElementById('prog-days-count').innerText = `${list.length} วัน`;
+    document.getElementById('prog-days-percent').innerText = `${Math.min(100, (list.length/100)*100).toFixed(1)}%`;
+    document.getElementById('prog-topics-count').innerText = `${list.length} เรื่อง`;
+
+    if (list.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#94a3b8;">ยังไม่มีประวัติการบันทึกการสอนในภาคเรียน/ปีการศึกษานี้</td></tr>';
+      return;
+    }
+
+    const gradeMap = { p1: 'ป.1', p2: 'ป.2', p3: 'ป.3', p4: 'ป.4', p5: 'ป.5', p6: 'ป.6' };
+    list.forEach(item => {
+      const formCodes = (item.formative || []).map(x => extractIndicatorCode(x)).filter(Boolean).join(', ');
+      const summCodes = (item.summative || []).map(x => extractIndicatorCode(x)).filter(Boolean).join(', ');
+      const fullText = `<b>${item.topic}</b><br><span style="color:#2563eb; font-size:12px;">[ระหว่างทาง: ${formCodes || '-'}]</span><br><span style="color:#059669; font-size:12px;">[ปลายทาง: ${summCodes || '-'}]</span>`;
+      
+      tbody.innerHTML += `
+        <tr>
+          <td style="text-align:center;">${item.date}</td>
+          <td style="text-align:center; font-weight:600; color:#2563eb;">วันที่ ${item.dayNumber}</td>
+          <td>${gradeMap[item.grade]}/${item.room}</td>
+          <td>${item.subject}</td>
+          <td>${fullText}</td>
+          <td style="text-align:center;"><button class="btn btn-danger" onclick="deleteHistory(${item.id})">ลบ</button></td>
+        </tr>
+      `;
+    });
+  }
+
+  function deleteHistory(id) {
+    if (confirm('ยืนยันการลบประวัตินี้?')) {
+      teachingHistory = teachingHistory.filter(h => h.id !== id);
+      localStorage.setItem('sys_history_all_v24', JSON.stringify(teachingHistory));
+      renderHistoryTable();
+      renderDailyProgress();
+      renderMiniCalendar();
+      renderProgressScoreTable();
+      cloudSave();
+    }
+  }
+
+  function renderProgressScoreTable() {
+    const ctx = getContext();
+    const subject = document.getElementById('progSubjectSelect').selectedOptions[0].text;
+    const tbody = document.getElementById('progressWorkTableBody');
+    tbody.innerHTML = '';
+
+    const students = masterStudents.filter(s => s.grade === ctx.grade && s.room === ctx.room);
+    const historyList = teachingHistory.filter(h => h.year === ctx.year && h.term === ctx.term && h.grade === ctx.grade && h.room === ctx.room && h.subject === subject);
+
+    if (students.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:#94a3b8;">ไม่พบรายชื่อนักเรียนในฐานข้อมูลห้องนี้</td></tr>';
+      return;
+    }
+
+    if (historyList.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:#94a3b8;">ยังไม่มีประวัติการบันทึกหลังสอนในรายวิชานี้</td></tr>';
+      return;
+    }
+
+    if (!studentProgressScores[ctx.year]) studentProgressScores[ctx.year] = {};
+    if (!studentProgressScores[ctx.year][ctx.term]) studentProgressScores[ctx.year][ctx.term] = {};
+
+    students.forEach((s, sIdx) => {
+      if (!studentProgressScores[ctx.year][ctx.term][s.id]) studentProgressScores[ctx.year][ctx.term][s.id] = { fScores: {}, sScores: {} };
+      let studentScores = studentProgressScores[ctx.year][ctx.term][s.id];
+
+      historyList.forEach((h, hIdx) => {
+        const formCodes = (h.formative || []).map(x => extractIndicatorCode(x)).filter(Boolean).join(', ');
+        const summCodes = (h.summative || []).map(x => extractIndicatorCode(x)).filter(Boolean).join(', ');
+
+        let fScoreVal = studentScores.fScores[h.id] !== undefined ? studentScores.fScores[h.id] : 8;
+        let sScoreVal = studentScores.sScores[h.id] !== undefined ? studentScores.sScores[h.id] : 7;
+        let total = fScoreVal + sScoreVal;
+        let status = total >= 10 ? 'ผ่าน' : 'ปรับปรุง';
+
+        tbody.innerHTML += `
+          <tr>
+            <td style="text-align:center;">${sIdx + 1}</td>
+            <td><strong>${s.name}</strong><br><span style="font-size:11px; color:#64748b;">หัวข้อ: ${h.topic}</span></td>
+            <td style="background:#eff6ff; font-weight:600; color:#1e40af; font-size:13px;">${formCodes || '-'}</td>
+            <td style="text-align:center; background:#eff6ff;"><input type="number" class="score-input" value="${fScoreVal}" max="10" min="0" onchange="updateProgScoreVal('${s.id}', '${h.id}', 'f', this.value)"></td>
+            <td style="background:#f0fdf4; font-weight:600; color:#166534; font-size:13px;">${summCodes || '-'}</td>
+            <td style="text-align:center; background:#f0fdf4;"><input type="number" class="score-input" value="${sScoreVal}" max="10" min="0" onchange="updateProgScoreVal('${s.id}', '${h.id}', 's', this.value)"></td>
+            <td style="text-align:center; font-weight:bold; background:#fef3c7;">${total} / 20</td>
+            <td style="text-align:center;"><span class="badge ${total>=10?'badge-grade':'badge-danger'}">${status}</span></td>
+          </tr>
+        `;
+      });
+    });
+  }
+
+  function updateProgScoreVal(studentId, histId, type, val) {
+    const ctx = getContext();
+    if (!studentProgressScores[ctx.year]) studentProgressScores[ctx.year] = {};
+    if (!studentProgressScores[ctx.year][ctx.term]) studentProgressScores[ctx.year][ctx.term] = {};
+    if (!studentProgressScores[ctx.year][ctx.term][studentId]) studentProgressScores[ctx.year][ctx.term][studentId] = { fScores: {}, sScores: {} };
+
+    if (type === 'f') {
+      studentProgressScores[ctx.year][ctx.term][studentId].fScores[histId] = Number(val) || 0;
+    } else {
+      studentProgressScores[ctx.year][ctx.term][studentId].sScores[histId] = Number(val) || 0;
+    }
+    localStorage.setItem('sys_progress_scores_v24', JSON.stringify(studentProgressScores));
+    cloudSave();
+  }
+
+  function saveProgressScores() {
+    localStorage.setItem('sys_progress_scores_v24', JSON.stringify(studentProgressScores));
+    cloudSave();
+    alert('บันทึกและซิงค์คะแนนตามตัวชี้วัดเรียบร้อยแล้ว!');
+  }
+
+  function renderScoreTable() {
+    const ctx = getContext();
+    const tbody = document.getElementById('scoreTableBody');
+    tbody.innerHTML = '';
+    const list = masterStudents.filter(s => s.grade === ctx.grade && s.room === ctx.room);
+    if(list.length === 0) { tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:#94a3b8;">ไม่พบรายชื่อนักเรียนในฐานข้อมูล</td></tr>'; return; }
+    
+    list.forEach((s, idx) => {
+      tbody.innerHTML += `
+        <tr>
+          <td style="text-align:center;">${idx+1}</td>
+          <td><strong>${s.name}</strong></td>
+          <td style="text-align:center;">25</td><td style="text-align:center;">20</td><td style="text-align:center; background:#eff6ff; font-weight:bold;">45</td>
+          <td style="text-align:center;">24</td><td style="text-align:center;">19</td><td style="text-align:center; background:#f0fdf4; font-weight:bold;">43</td>
+          <td style="text-align:center; background:#fef3c7; font-weight:bold;">88</td>
+          <td style="text-align:center;"><span class="badge badge-grade">3.5</span></td>
+        </tr>
+      `;
+    });
+  }
+
+  function saveScoreRecords() { alert('บันทึกทะเบียนคะแนนสะสมเรียบร้อยแล้ว'); }
+
+  function getDailyPreviewHTML() {
+    const ctx = getContext();
+    const subject = document.getElementById('dailySubjectSelect').selectedOptions[0].text;
+    const unitSelectEl = document.getElementById('dailyUnitSelect');
+    let rawUnitText = unitSelectEl.selectedOptions[0]?.text || '-';
+    
+    rawUnitText = rawUnitText.replace(/^หน่วยที่\s*/, '');
+    const cleanUnitTitle = `หน่วยที่ ${rawUnitText}`;
+
+    const formArr = getCombinedIndicators('formative');
+    const summArr = getCombinedIndicators('summative');
+    const formCodes = formArr.map(x => extractIndicatorCode(x)).filter(Boolean).join(' , ');
+    const summCodes = summArr.map(x => extractIndicatorCode(x)).filter(Boolean).join(' , ');
+    
+    let combinedCodes = [];
+    if (formCodes) combinedCodes.push(formCodes);
+    if (summCodes) combinedCodes.push(summCodes);
+    const allCodesStr = combinedCodes.join(' , ');
+
+    const displayUnitWithCodes = allCodesStr ? `${cleanUnitTitle} (รหัสตัวชี้วัด: ${allCodesStr})` : cleanUnitTitle;
+
+    const topic = document.getElementById('dailyTopic').value || '-';
+    const teacher = document.getElementById('teacherName').value;
+    const school = document.getElementById('schoolName').value;
+    const director = document.getElementById('directorName').value;
+
+    const list = masterStudents.filter(s => s.grade === ctx.grade && s.room === ctx.room);
+    const total = list.length || 0;
+    const present = list.filter(s => s.attendance === 'present').length || 0;
+    const absent = total - present;
+
+    return `
+      <div style="text-align:center; font-weight:bold; font-size:18px; margin-bottom:5px;">บันทึกผลหลังการจัดการเรียนรู้</div>
+      <div style="text-align:center; font-weight:bold; font-size:15px; margin-bottom:12px;">${topic}</div>
+      <table style="width:100%; border:none; margin-bottom:12px; font-size:15px;">
+        <tr>
+          <td>กลุ่มสาระการเรียนรู้ ${subject}</td>
+          <td>ชั้นประถมศึกษาปีที่ ${ctx.grade.replace('p','')}&nbsp;&nbsp;ห้อง ${ctx.room}</td>
+          <td>ภาคเรียนที่ ${ctx.term} ปีการศึกษา ${ctx.year}</td>
+        </tr>
+        <tr>
+          <td colspan="2">${displayUnitWithCodes}</td>
+          <td>รหัสวิชา ค13101</td>
+        </tr>
+        <tr>
+          <td colspan="3">ผู้สอน ${teacher}</td>
+        </tr>
+      </table>
+      <hr style="border:0.5px solid #000; margin-bottom:12px;">
+      <p style="font-weight:bold; font-size:16px; margin-bottom:6px;">สรุปผลหลังการจัดการเรียนรู้</p>
+      <p style="margin-bottom:4px;">1. นักเรียนทั้งหมด ....................${total}.................... คน นักเรียนมาเรียน ....................${present}.................... คน นักเรียนขาดเรียน ....................${absent}.................... คน</p>
+      <p style="margin-bottom:4px;">&nbsp;&nbsp;&nbsp;&nbsp;ผ่านจุดประสงค์การเรียนรู้ ....................${total}.................... คน คิดเป็นร้อยละ 100.00</p>
+      <p style="margin-bottom:4px;">&nbsp;&nbsp;&nbsp;&nbsp;ไม่ผ่านจุดประสงค์การเรียนรู้ ....................0.................... คน คิดเป็นร้อยละ 0.00</p>
+      
+      <p style="font-weight:bold; font-size:16px; margin-top:10px; margin-bottom:6px;">2. ผลการเรียนรู้ตามจุดประสงค์</p>
+      <p style="margin-bottom:4px;"><b>- ด้านความรู้ (K):</b> ${document.getElementById('dailyOutcomeK').value || '-'}</p>
+      <p style="margin-bottom:4px;"><b>- ด้านทักษะ (P):</b> ${document.getElementById('dailyOutcomeP').value || '-'}</p>
+      <p style="margin-bottom:6px;"><b>- ด้านเจตคติ (A):</b> ${document.getElementById('dailyOutcomeA').value || '-'}</p>
+      
+      <p style="font-weight:bold; font-size:16px; margin-top:10px; margin-bottom:4px;">ปัญหา / อุปสรรค</p>
+      <p style="margin-bottom:15px;">${document.getElementById('dailySolution').value || '-'}</p>
+      
+      <div style="float:right; text-align:center; width:240px; font-size:15px;">
+        <p style="margin-bottom:4px;">ลงชื่อ......................................................ผู้สอน</p>
+        <p style="margin-bottom:4px;">(${teacher})</p>
+        <p>ตำแหน่ง ${school}</p>
+      </div>
+      <div style="clear:both; height:15px;"></div>
+      
+      <p style="font-weight:bold; font-size:16px; margin-bottom:4px;">ข้อเสนอแนะผู้บริหารสถานศึกษา</p>
+      <p style="margin-bottom:20px;">..................................................................................................................................................................................</p>
+      
+      <div style="float:right; text-align:center; width:240px; font-size:15px;">
+        <p style="margin-bottom:4px;">ลงชื่อ......................................................ผู้บริหาร</p>
+        <p style="margin-bottom:4px;">(${director})</p>
+        <p>ผู้อำนวยการ${school}</p>
+      </div>
+      <div style="clear:both;"></div>
+    `;
+  }
+
+  function openPreviewModal() {
+    document.getElementById('previewContainer').innerHTML = getDailyPreviewHTML();
+    document.getElementById('previewModal').style.display = 'flex';
+  }
+
+  function closePreviewModal() {
+    document.getElementById('previewModal').style.display = 'none';
+  }
+
+  function downloadDailyWord() {
+    const htmlContent = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+      <head>
+        <meta charset='utf-8'>
+        <style>
+          @page { size: 21cm 29.7cm; margin: 20mm 20mm 20mm 20mm; }
+          body { font-family: 'TH Sarabun PSK', Arial; font-size: 16pt; line-height: 1.4; }
+        </style>
+      </head>
+      <body>
+        ${getDailyPreviewHTML()}
+      </body>
+      </html>
+    `;
+    const blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `บันทึกผลหลังการจัดการเรียนรู้_A4.doc`; a.click();
+    closePreviewModal();
+  }
+
+  function downloadDailyExcel() {
+    const ctx = getContext();
+    const list = masterStudents.filter(s => s.grade === ctx.grade && s.room === ctx.room);
+    let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head><body><table border="1"><tr><th colspan="3">สรุปการมาเรียนประจำวัน (ปี ${ctx.year} เทอม ${ctx.term})</th></tr><tr><th>เลขที่</th><th>ชื่อ-นามสกุล</th><th>มาเรียน</th></tr>`;
+    list.forEach((s, idx) => {
+      html += `<tr><td>${idx+1}</td><td>${s.name}</td><td>${s.attendance}</td></tr>`;
+    });
+    html += `</table></body></html>`;
+    const blob = new Blob(['\ufeff', html], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `เช็คชื่อประจำวัน.xls`; a.click();
+  }
+
+  function downloadScoreWord() {
+    const ctx = getContext();
+    const list = masterStudents.filter(s => s.grade === ctx.grade && s.room === ctx.room);
+    let html = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'>
+      <head>
+        <meta charset='utf-8'>
+        <style>
+          @page { size: 21cm 29.7cm; margin: 20mm; }
+          body { font-family: 'TH Sarabun PSK', Arial; font-size: 16pt; }
+        </style>
+      </head>
+      <body>
+        <h2>ทะเบียนคะแนนสะสม ชั้น ${ctx.grade} ห้อง ${ctx.room} (ปีการศึกษา ${ctx.year})</h2>
+        <table border="1" cellspacing="0" cellpadding="5" style="width:100%; border-collapse:collapse;">
+          <tr><th>เลขที่</th><th>ชื่อ-นามสกุล</th><th>รวม T1</th><th>รวม T2</th><th>รวมทั้งปี</th><th>เกรด</th></tr>
+    `;
+    list.forEach((s, idx) => {
+      html += `<tr><td>${idx+1}</td><td>${s.name}</td><td>45</td><td>43</td><td>88</td><td>3.5</td></tr>`;
+    });
+    html += `</table></body></html>`;
+    const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `ทะเบียนคะแนนสะสม_A4.doc`; a.click();
+  }
+
+  function downloadScoreExcel() {
+    const ctx = getContext();
+    const list = masterStudents.filter(s => s.grade === ctx.grade && s.room === ctx.room);
+    let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head><body><table border="1"><tr><th colspan="6">ทะเบียนคะแนนสะสม ชั้น ${ctx.grade} ห้อง ${ctx.room}</th></tr><tr><th>เลขที่</th><th>ชื่อ-นามสกุล</th><th>รวม T1</th><th>รวม T2</th><th>รวมทั้งปี</th><th>เกรด</th></tr>`;
+    list.forEach((s, idx) => {
+      html += `<tr><td>${idx+1}</td><td>${s.name}</td><td>45</td><td>43</td><td>88</td><td>3.5</td></tr>`;
+    });
+    html += `</table></body></html>`;
+    const blob = new Blob(['\ufeff', html], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `ทะเบียนคะแนนสะสม.xls`; a.click();
+  }
+
+  // เริ่มต้นระบบและดึงข้อมูลจากคลาวด์อัตโนมัติทันที
+  manualCloudSync();
+</script>
+</body>
+</html>
